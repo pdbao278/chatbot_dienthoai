@@ -161,9 +161,20 @@ Phiên bản đầu có thể nhận diện các ý định sau:
 | search | “Có máy Samsung RAM 8GB không?” |
 | detail | “Cho mình thông tin Xiaomi POCO X8 Pro” |
 | compare | “So sánh iPhone 17 với Samsung Galaxy S25” |
-| greeting/other | “Xin chào”, câu hỏi ngoài phạm vi |
+| browse | “Có những hãng nào?”, “Liệt kê tất cả Samsung”, “Máy nào dưới 5 triệu?” |
+| greeting | “Xin chào”, “Chào bạn” |
+| out_of_scope | Câu hỏi ngoài phạm vi tư vấn sản phẩm |
 
 Bắt đầu bằng luật và từ khóa rõ ràng vì dễ giải thích, không cần dữ liệu huấn luyện ban đầu. Nếu muốn thử mô hình phân loại trong môn học, có thể tạo tập câu hỏi riêng, gán nhãn ý định rồi so sánh với baseline luật. **CSV sản phẩm không phải tập dữ liệu câu hỏi đã gán nhãn**, nên không thể dùng trực tiếp CSV để huấn luyện intent classifier.
+
+**Xử lý câu hỏi ngoài phạm vi:**
+
+| Câu hỏi ví dụ | Cách phản hồi |
+|---|---|
+| “Máy này có bảo hành không?” | Trả lời nhẹ nhàng rằng bot chưa có thông tin bảo hành, gợi ý liên hệ cửa hàng |
+| “Mua ở đâu?” | Nếu sản phẩm có trường `url` → đưa liên kết; nếu không → nói chưa có thông tin |
+| “Tại sao máy này đắt?” | Liệt kê thông số nổi bật từ CSV nhưng không đánh giá giá cả hợp lý hay không |
+| “So sánh với laptop” | Nói rõ bot chỉ tư vấn điện thoại từ danh mục hiện có |
 
 #### Bước C — Trích xuất thực thể và điều kiện
 
@@ -196,6 +207,18 @@ Với giá tiền, cần nhận biết quan hệ:
 - “từ 10 đến 15 triệu” → khoảng giá.
 - “khoảng 15 triệu” → khoảng giá mềm; nên hỏi lại nếu chưa thống nhất độ rộng khoảng hoặc dùng mức mặc định được ghi rõ trong tài liệu.
 
+Ngoài ra, cần nhận biết các **cụm từ khoảng giá thông dụng** của người Việt:
+
+| Cách nói | Ánh xạ khoảng giá mặc định |
+|---|---|
+| “giá rẻ”, “phân khúc rẻ” | max_price_vnd = 5.000.000 |
+| “giá sinh viên”, “cho học sinh” | max_price_vnd = 8.000.000 |
+| “tầm trung” | min_price_vnd = 5.000.000, max_price_vnd = 15.000.000 |
+| “cao cấp”, “flagship” | min_price_vnd = 15.000.000 |
+| “siêu cao cấp” | min_price_vnd = 25.000.000 |
+
+Các ngưỡng trên là mặc định tham khảo. Nếu người dùng nói “tầm trung” nhưng trước đó đã nêu hãng Apple (giá phổ biến trên 15 triệu), có thể hỏi lại để xác nhận khoảng giá phù hợp hơn.
+
 #### Bước D — Chuẩn hóa từ đồng nghĩa sang tag của CSV
 
 Tag phải lấy từ dữ liệu thật, không tự tạo tag mới khi truy vấn. Một số tag đang có trong CSV:
@@ -218,9 +241,38 @@ Ví dụ từ điển đồng nghĩa ban đầu:
 | selfie đẹp, chụp ảnh tự sướng | selfie_dep |
 | sạc nhanh | sac_nhanh |
 | màn hình mượt, cuộn mượt | man_hinh_muot |
-| máy gập | thiet_ke_gap |
+| máy gập, điện thoại gập | thiet_ke_gap |
+| cao cấp, hàng đầu, dòng flagship | flagship |
+| doanh nhân, công việc, sang trọng | doanh_nhan |
+| học sinh, sinh viên, cho sinh viên | hoc_sinh_sinh_vien |
+| hồng ngoại, điều khiển tivi, remote tivi | hong_ngoai |
+| thanh toán chạm, NFC, chạm thanh toán | nfc |
+| mạng 5G, hỗ trợ 5G, có 5G | 5g |
 
 Một câu có thể tạo ra nhiều tag. Không nên coi “pin trâu” và “pin khủng” là hai từ giống hệt nhau nếu dữ liệu phân biệt chúng; có thể ánh xạ cả hai, hoặc dùng một tag làm ưu tiên và một tiêu chí xếp hạng theo pin_mah.
+
+**Phân biệt pin_trau và pin_khung:** trong dữ liệu hiện tại, cả hai tag cùng tồn tại. Nếu cần phân biệt, có thể dùng ngưỡng tham khảo: pin_trau cho máy có pin ≥ 5.000mAh, pin_khung cho máy có pin ≥ 6.000mAh. Khi người dùng nói “pin khỏe” hoặc “pin tốt” mà không nói rõ hơn, tìm cả hai tag (pin_trau OR pin_khung) rồi sắp xếp kết quả theo pin_mah giảm dần.
+
+#### Bước D½ — Ánh xạ tên model rút gọn
+
+Người dùng thường không gọi đầy đủ tên sản phẩm. Cần xây dựng bảng `model_aliases` trong `aliases.py` để ánh xạ tên rút gọn về id sản phẩm trong CSV.
+
+Ví dụ:
+
+| Người dùng nói | Có thể ánh xạ về |
+|---|---|
+| “POCO X8 Pro” | id duy nhất → trả chi tiết luôn |
+| “Note 15” | nhiều id (Redmi Note 15, Note 15 Pro, Note 15 Pro 5G) → hỏi lại |
+| “S25” | nhiều id (Galaxy S25, S25 FE, S25 Ultra) → hỏi lại |
+| “17 Pro Max” | id cùng model nhưng khác ROM (256GB, 512GB, 1TB) → liệt kê phiên bản |
+| “iPhone mới nhất” | không ánh xạ chắc chắn → hỏi lại dòng cụ thể |
+
+Quy tắc:
+
+1. Tách tên model gốc khỏi phần dung lượng ROM (ví dụ “iPhone 17 Pro Max 256GB” → model gốc là “iPhone 17 Pro Max”).
+2. Nếu tên rút gọn khớp **duy nhất 1 model gốc** nhưng có nhiều phiên bản ROM → liệt kê các phiên bản ROM kèm giá để người dùng chọn.
+3. Nếu tên rút gọn khớp **nhiều model gốc** khác nhau → đưa danh sách tên đầy đủ và hỏi người dùng muốn xem máy nào.
+4. Nếu không khớp model nào → báo không tìm thấy và gợi ý tên gần nhất (nếu có).
 
 #### Bước E — Xử lý phủ định và câu mơ hồ
 
@@ -229,6 +281,33 @@ Một câu có thể tạo ra nhiều tag. Không nên coi “pin trâu” và �
 - Nếu người dùng vừa nói “dưới 10 triệu” vừa nói “tối thiểu 15 triệu”, điều kiện mâu thuẫn; hỏi lại thay vì trả kết quả sai.
 - Nếu tên model khớp nhiều sản phẩm, hỏi thêm phiên bản dung lượng hoặc đưa các lựa chọn để người dùng chọn.
 - Nếu không có ngân sách hay nhu cầu nào, hỏi một câu ngắn như “Bạn dự kiến chi khoảng bao nhiêu?” hoặc đề nghị người dùng chọn ưu tiên.
+
+#### Bước E½ — Quản lý ngữ cảnh hội thoại (Dialogue State)
+
+Để xử lý câu tiếp nối (ví dụ người dùng nói “ưu tiên pin trâu nhé” sau khi đã nêu hãng và giá ở lượt trước), cần giữ một ngữ cảnh hội thoại tối thiểu:
+
+**Thông tin cần lưu qua các lượt:**
+
+~~~json
+{
+  "brand": "Samsung",
+  "min_price_vnd": null,
+  "max_price_vnd": 15000000,
+  "preferences": ["pin_trau"],
+  "excluded_brands": [],
+  "last_results": [42, 58, 71],
+  "turn_count": 2
+}
+~~~
+
+**Quy tắc quản lý state:**
+
+1. **Giữ tối đa 5 lượt gần nhất** trong ngữ cảnh. Đủ để xử lý câu tiếp nối mà không tiêu tốn quá nhiều token gửi cho LLM.
+2. **Khi nào gộp điều kiện:** nếu lượt mới bổ sung thông tin chưa có (thêm tag, thêm ưu tiên) → gộp vào state hiện tại.
+3. **Khi nào ghi đè:** nếu lượt mới thay đổi trực tiếp thông tin đã có (đổi hãng từ Samsung sang Xiaomi, đổi ngân sách từ 15 triệu sang 10 triệu) → ghi đè trường tương ứng.
+4. **Khi nào xóa state:** người dùng nói rõ ý định bắt đầu lại (“tìm kiếm mới”, “bắt đầu lại”, “quên hết đi”) hoặc phiên chat hết hạn → xóa toàn bộ state.
+5. **Lưu last_results:** giữ danh sách id sản phẩm đã gợi ý ở lượt trước để xử lý câu tiếp nối kiểu “cho mình xem máy thứ hai” hoặc “so sánh hai máy vừa rồi”.
+6. **Không xây bộ nhớ dài hạn:** phiên bản đồ án đầu tiên chỉ cần state trong phiên chat hiện tại, không cần lưu lịch sử người dùng qua nhiều phiên.
 
 #### Bước F — Dùng LLM ở chỗ cần thiết
 
@@ -343,9 +422,26 @@ min_rom_gb, min_battery_mah, needs, excluded_brands, limit
 
 Dùng khi khách hỏi thông tin một mẫu cụ thể. Ưu tiên tìm theo id hoặc tên khớp rõ ràng. Nếu có nhiều phiên bản tên gần giống nhau, trả các lựa chọn hoặc hỏi lại, không tự chọn phiên bản.
 
+**Xử lý đa phiên bản ROM:** CSV có nhiều dòng cho cùng 1 model chỉ khác ROM (ví dụ iPhone 17 Pro Max có bản 256GB, 512GB và 1TB). Khi người dùng hỏi tên model mà không nêu dung lượng:
+
+1. Nhóm các dòng CSV theo tên model gốc (bỏ phần "256GB/512GB/1TB").
+2. Nếu nhóm có nhiều hơn 1 dòng → trả danh sách phiên bản kèm giá:
+
+~~~text
+IPhone 17 Pro Max có các phiên bản:
+  • 256GB — 34.990.000đ
+  • 512GB — 39.990.000đ
+  • 1TB  — 44.990.000đ
+Bạn muốn xem phiên bản nào?
+~~~
+
+3. Nếu nhóm chỉ có 1 dòng → trả chi tiết luôn.
+
 ### 6.3. compare_phones
 
 Dùng để so sánh hai hoặc một số ít sản phẩm theo trường có trong CSV. Chỉ so sánh giá, RAM, ROM, pin, màn hình, camera và tags hiện có; không tạo kết luận không có dữ liệu hỗ trợ.
+
+**Lưu ý khi so sánh chip:** cột `chip_cpu` là chuỗi mô tả tự do (ví dụ "Apple A19 Pro 6 nhân", "Snapdragon 8s Gen 4"). Khi so sánh, chỉ **liệt kê tên chip** của từng máy, không được kết luận chip nào "mạnh hơn" hay "yếu hơn" nếu không có dữ liệu benchmark đáng tin cậy.
 
 ### Quy trình an toàn cho một lần gọi tool
 
@@ -357,6 +453,39 @@ Dùng để so sánh hai hoặc một số ít sản phẩm theo trường có t
 6. Agent viết câu trả lời dựa trên kết quả đó.
 
 Giới hạn tối đa hai lần gọi tool trong một lượt hội thoại. Nếu lời gọi lỗi hoặc model lặp lại, dừng vòng lặp và trả thông báo phù hợp. CSV chỉ được đọc; không cung cấp tool sửa, xóa hoặc ghi đè dữ liệu.
+
+### 6.4. Mẫu system prompt cho Ollama
+
+Dưới đây là mẫu system prompt tối thiểu để Agent hoạt động đúng vai trò. Có thể điều chỉnh ngôn từ nhưng phải giữ đủ các ràng buộc:
+
+~~~text
+Bạn là trợ lý tư vấn điện thoại. Nhiệm vụ của bạn là giúp khách hàng tìm điện thoại
+phù hợp từ danh mục sản phẩm có sẵn.
+
+QUY TẮC BẮT BUỘC:
+1. Chỉ trả lời dựa trên dữ liệu do các công cụ (tool) trả về.
+   Không được tự bịa giá, thông số, tồn kho hoặc chính sách bảo hành.
+2. Giá trong dữ liệu là giá tham khảo tại thời điểm thu thập, không phải giá
+   trực tuyến hiện tại. Luôn ghi chú điều này khi đưa giá.
+3. Không được tự đánh giá chip mạnh/yếu chỉ từ tên chip. Nếu cần so sánh
+   hiệu năng, chỉ liệt kê tên chip và tag chip_gaming (nếu có).
+4. Không tự nới điều kiện cứng (hãng, ngân sách, RAM/ROM tối thiểu).
+   Nếu không có kết quả, báo rõ và hỏi khách muốn nới điều kiện nào.
+5. Trả lời bằng tiếng Việt, tự nhiên và thân thiện.
+6. Không dùng ngôn ngữ quảng cáo: "rẻ nhất thị trường", "mạnh nhất phân khúc",
+   "giá mới nhất" nếu CSV không có căn cứ.
+7. Mỗi gợi ý cần kèm lý do ngắn gọn liên quan đến nhu cầu khách đã nêu.
+
+CÔNG CỤ ĐƯỢC PHÉP GỌI:
+- recommend_phones: gợi ý điện thoại theo điều kiện.
+- get_phone_detail: xem chi tiết một mẫu cụ thể.
+- compare_phones: so sánh hai hoặc vài mẫu.
+
+Không gọi công cụ nào khác ngoài ba công cụ trên.
+Tối đa 2 lần gọi công cụ trong một lượt trả lời.
+~~~
+
+Lưu prompt này trong thư mục `agent/prompts/` dưới dạng file text hoặc hằng chuỗi trong `orchestrator.py`. Đọc từ cấu hình nếu cần thay đổi mà không sửa mã.
 
 ---
 
