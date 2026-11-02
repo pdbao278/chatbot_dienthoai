@@ -1,6 +1,6 @@
 # KIẾN TRÚC VÀ HƯỚNG DẪN THỰC HIỆN CHATBOT TƯ VẤN ĐIỆN THOẠI
 
-> **Phạm vi:** chatbot tiếng Việt giúp người dùng tìm và gợi ý điện thoại từ CSV bằng Flask, NLP và AI Agent chạy qua Ollama.
+> **Phạm vi:** website mô phỏng tư vấn điện thoại bằng Flask, PostgreSQL, NLP tiếng Việt và AI Agent chạy qua Ollama. CSV chỉ là dữ liệu đầu vào để nạp ban đầu.
 >
 > **Không nằm trong phiên bản này:** chính sách bảo hành, kiểm tra tồn kho, cập nhật giá trực tuyến, đặt hàng/thanh toán và tư vấn dựa trên tài liệu dài.
 
@@ -10,7 +10,8 @@
 
 Đề xuất làm một **ứng dụng Flask dạng modular monolith**: một ứng dụng chạy trên máy, bên trong chia thành các module có trách nhiệm riêng.
 
-- Dùng **CSV làm nguồn dữ liệu chuẩn**. `dien_thoai_chuan_hoa.json` là bản xuất cùng dữ liệu; ứng dụng chỉ đọc một nguồn được cấu hình, không tự chọn giữa CSV và JSON.
+- Dùng **PostgreSQL làm nguồn dữ liệu chuẩn khi ứng dụng chạy**. Nạp `dien_thoai_chuan_hoa.csv` vào database bằng một lệnh riêng ở bước khởi tạo; sau đó website đọc database, không đọc CSV mỗi lần khởi động hay mỗi yêu cầu. Chức năng tư vấn chỉ đọc catalog; trang quản trị ghi dữ liệu là phần mở rộng. `dien_thoai_chuan_hoa.json` chỉ là bản tham chiếu/xuất, không tham gia runtime.
+- Dùng SQLAlchemy 2.x để ánh xạ model và truy vấn, Alembic để quản lý thay đổi schema bằng migration. Mỗi request dùng một database session riêng rồi đóng session sau khi xử lý.
 - Dùng **NLP** để chuẩn hóa tiếng Việt, nhận diện ý định, trích xuất điều kiện bắt buộc và sở thích.
 - Dùng **AI Agent qua Ollama** để gọi tool được backend cho phép và diễn đạt kết quả. Backend xác định tool theo intent; Agent không được tự sửa hoặc nới điều kiện đã xác nhận.
 - Chỉ cho Agent gọi các công cụ đọc dữ liệu có schema và giới hạn rõ ràng; kiểm tra mọi lời gọi ở backend trước khi truy vấn.
@@ -41,11 +42,13 @@ flowchart TD
     Agent --> Guard[Danh sách công cụ + kiểm tra tham số]
     Guard --> Tools[Công cụ tư vấn sản phẩm]
     Tools --> Catalog[Dịch vụ danh mục]
-    Catalog --> CSV[(dien_thoai_chuan_hoa.csv)]
+    Catalog --> DB[(PostgreSQL)]
     Catalog --> Results[Kết quả có cấu trúc]
     Results --> Agent
     Agent --> Answer[Câu trả lời tiếng Việt]
     Answer --> UI
+    CSV[(dien_thoai_chuan_hoa.csv)] --> Seed[Lệnh nạp dữ liệu ban đầu]
+    Seed --> DB
 ~~~
 
 ### Trách nhiệm từng phần
@@ -58,8 +61,9 @@ flowchart TD
 | Backend/policy | Xác thực trường, phát hiện mâu thuẫn và quyết định khi nào phải hỏi lại | Giữ điều kiện nhất quán trước khi gọi model hoặc catalog |
 | Agent | Gọi tool đã được backend cho phép và diễn đạt kết quả | LLM xử lý hội thoại nhưng không làm nguồn dữ liệu hoặc thay đổi điều kiện đã xác thực |
 | Công cụ | Xác thực tham số và gọi chức năng nghiệp vụ | Chặn gọi hàm ngoài phạm vi, giữ hợp đồng đầu vào rõ ràng |
-| Dịch vụ danh mục | Lọc, so sánh và xếp hạng điện thoại | Kết quả cần ổn định, đúng theo CSV và có thể kiểm thử độc lập |
-| CSV | Nguồn thông tin sản phẩm tại thời điểm chuẩn bị dữ liệu | Đơn giản, phù hợp quy mô hiện tại, dễ trình bày và kiểm tra |
+| Dịch vụ danh mục | Truy vấn PostgreSQL, lọc, so sánh và xếp hạng điện thoại | Giữ logic dữ liệu tập trung, kết quả ổn định và có thể kiểm tra độc lập |
+| PostgreSQL | Lưu sản phẩm/tag và là nguồn dữ liệu runtime duy nhất | Mô phỏng cách website thật lưu dữ liệu bền vững và phục vụ nhiều request qua backend |
+| Lệnh seed CSV | Kiểm tra rồi nhập CSV vào PostgreSQL khi khởi tạo/cập nhật dữ liệu | Tách nhập dữ liệu khỏi phục vụ web; không làm chậm hoặc ghi đè dữ liệu khi app khởi động |
 
 ---
 
@@ -70,14 +74,24 @@ flowchart TD
 ~~~text
 E:\NLP/
 ├── data/
-│   ├── dien_thoai_chuan_hoa.csv
-│   ├── dien_thoai_chuan_hoa.json  # bản xuất; không phải nguồn độc lập
+│   ├── dien_thoai_chuan_hoa.csv   # dữ liệu seed ban đầu
+│   ├── dien_thoai_chuan_hoa.json  # bản tham chiếu/xuất; không dùng runtime
 │   └── kientruc.md                # vị trí hiện tại của tài liệu này
+├── docs/
+│   ├── mo_ta_du_lieu.md
+│   └── huong_dan_tung_buoi/
+│       ├── README.md
+│       ├── TIEN_DO.md
+│       └── buoi_*.md
 ├── src/
 │   └── phone_advisor/
 │       ├── __init__.py
 │       ├── app.py
 │       ├── config.py
+│       ├── db/
+│       │   ├── base.py
+│       │   ├── models.py
+│       │   └── session.py
 │       ├── web/
 │       │   ├── routes.py
 │       │   ├── templates/
@@ -102,7 +116,16 @@ E:\NLP/
 ├── tests/
 │   ├── test_nlp.py
 │   ├── test_catalog.py
-│   └── test_agent_flow.py
+│   ├── test_agent_flow.py
+│   └── fixtures/
+├── evaluation/
+│   └── intent_slots.csv
+├── migrations/                    # migration do Alembic quản lý
+├── scripts/
+│   ├── __init__.py
+│   └── seed_catalog.py            # lệnh nhập CSV tường minh, không chạy lúc app start
+├── .env.example                   # tên biến mẫu, không chứa mật khẩu thật
+├── .gitignore
 ├── requirements.txt
 └── README.md
 ~~~
@@ -112,11 +135,14 @@ E:\NLP/
 - **web/**: route Flask, trang chat và thành phần hiển thị thẻ sản phẩm.
 - **nlp/**: chuẩn hóa câu chữ, từ điển đồng nghĩa, nhận diện ý định, trích xuất điều kiện và giữ một số thông tin hội thoại cần thiết.
 - **agent/**: lời nhắc hệ thống, điều phối Ollama, schema tham số và danh sách hàm Agent được phép gọi.
-- **catalog/**: đọc CSV, lọc dữ liệu, xếp hạng kết quả, lấy chi tiết và so sánh.
-- **config.py**: đường dẫn CSV, tên model và cấu hình chạy; tránh gắn cứng đường dẫn máy tính ở nhiều nơi.
-- **data/**: CSV là nguồn chuẩn; JSON là bản xuất cần được tạo lại từ CSV khi dữ liệu thay đổi. Tài liệu này hiện ở `data/kientruc.md` theo vị trí của workspace.
+- **db/**: khai báo model PostgreSQL, tạo engine/session factory; không chia sẻ một Session giữa nhiều request.
+- **catalog/**: gọi repository để lọc dữ liệu trong PostgreSQL, xếp hạng kết quả, lấy chi tiết và so sánh.
+- **scripts/seed_catalog.py**: nhập CSV có kiểm tra vào PostgreSQL theo lệnh tường minh; mặc định từ chối nhập lại nếu đã có dữ liệu, không tự xóa hàng vắng khỏi CSV.
+- **config.py**: đọc `DATABASE_URL`, tên model và cấu hình chạy; không gắn cứng đường dẫn máy tính hoặc mật khẩu trong mã nguồn.
+- **data/**: CSV dùng để seed ban đầu/nhập một phiên bản dữ liệu mới theo quy trình; sau khi seed, PostgreSQL mới là nguồn chuẩn cho website. JSON không dùng runtime. Tài liệu này hiện ở `data/kientruc.md` theo vị trí của workspace.
+- **docs/**: data dictionary và hướng dẫn thực hiện theo từng buổi trong [`docs/huong_dan_tung_buoi/README.md`](../docs/huong_dan_tung_buoi/README.md).
 
-Không cần tách thành nhiều dịch vụ/microservice. Với một CSV nhỏ và một máy chạy local, cách đó tăng cấu hình phải quản lý mà chưa đem lại lợi ích thiết thực.
+Không cần tách thành nhiều dịch vụ/microservice. Một ứng dụng Flask kết nối một PostgreSQL local là đủ để mô phỏng website thật mà vẫn giữ cấu hình vừa sức cho đồ án.
 
 ---
 
@@ -197,7 +223,7 @@ Bắt đầu bằng luật và từ khóa rõ ràng vì dễ giải thích, khô
 |---|---|
 | “Máy này có bảo hành không?” | Trả lời nhẹ nhàng rằng bot chưa có thông tin bảo hành, gợi ý liên hệ cửa hàng |
 | “Mua ở đâu?” | Nếu sản phẩm có trường `url` → đưa liên kết; nếu không → nói chưa có thông tin |
-| “Tại sao máy này đắt?” | Liệt kê thông số nổi bật từ CSV nhưng không đánh giá giá cả hợp lý hay không |
+| “Tại sao máy này đắt?” | Liệt kê thông số nổi bật có trong database nhưng không đánh giá giá cả hợp lý hay không |
 | “So sánh với laptop” | Nói rõ bot chỉ tư vấn điện thoại từ danh mục hiện có |
 
 #### Bước C — Trích xuất thực thể và điều kiện
@@ -205,7 +231,7 @@ Bắt đầu bằng luật và từ khóa rõ ràng vì dễ giải thích, khô
 Các trường nên nhận diện:
 
 - **Hãng**: Apple, Samsung, Xiaomi, OPPO, vivo, realme, HONOR, Tecno, Motorola, Nothing Phone, Nubia.
-- **Model**: đối chiếu tên máy trong CSV, hỗ trợ tên gọi rút gọn nếu xác định được duy nhất.
+- **Model**: đối chiếu tên máy trong database, hỗ trợ tên gọi rút gọn nếu xác định được duy nhất.
 - **Ngân sách**: giá tối đa, giá tối thiểu hoặc khoảng giá.
 - **Thông số tối thiểu**: RAM, ROM, pin, tần số quét nếu người dùng nêu rõ.
 - **Nhu cầu**: chơi game, pin trâu, chụp ảnh đẹp, selfie, sạc nhanh, màn hình mượt, 5G...
@@ -235,9 +261,9 @@ Với giá tiền, cần nhận biết quan hệ:
 Các cụm như “giá rẻ”, “giá sinh viên”, “tầm trung”, “cao cấp” và “flagship” không có ngưỡng giá thống nhất cho mọi người. Không tự chuyển chúng thành điều kiện giá cứng. Mặc định nên hỏi ngân sách; nếu đồ án cần ánh xạ tự động, định nghĩa các khoảng trong cấu hình, coi chúng là mặc định mềm và thông báo cho người dùng. “Sinh viên” mô tả nhóm người dùng, không tự nó xác định ngân sách.
 
 
-#### Bước D — Chuẩn hóa từ đồng nghĩa sang tag của CSV
+#### Bước D — Chuẩn hóa từ đồng nghĩa sang tag trong database
 
-Tag phải lấy từ dữ liệu thật, không tự tạo tag mới khi truy vấn. Một số tag đang có trong CSV:
+Tag phải lấy từ dữ liệu thật, không tự tạo tag mới khi truy vấn. Một số tag đang có trong database sau khi seed:
 
 ~~~text
 choi_game, chip_gaming, pin_trau, pin_khung, chup_anh_dep,
@@ -273,7 +299,7 @@ Các tag nhận diện từ lời nói mặc định là sở thích mềm. Ch�
 
 #### Bước D½ — Ánh xạ tên model rút gọn
 
-Người dùng thường không gọi đầy đủ tên sản phẩm. Cần xây dựng bảng `model_aliases` trong `aliases.py` để ánh xạ tên rút gọn về id sản phẩm trong CSV.
+Người dùng thường không gọi đầy đủ tên sản phẩm. Cần xây dựng bảng `model_aliases` trong `aliases.py` để ánh xạ tên rút gọn về ID sản phẩm trong database.
 
 Ví dụ:
 
@@ -360,24 +386,35 @@ Có thể dùng Underthesea để thử tách từ hoặc hỗ trợ phân tích
 
 ## 5. Dịch vụ dữ liệu sản phẩm
 
-### 5.1. Nạp và kiểm tra CSV
+### 5.1. PostgreSQL, schema và vòng đời dữ liệu
 
-Khi ứng dụng khởi động:
+PostgreSQL là nguồn chuẩn duy nhất khi web chạy. CSV chỉ được đọc bởi lệnh seed riêng để nhập dữ liệu ban đầu hoặc một đợt cập nhật được chủ động yêu cầu; Flask không tự seed, không đọc CSV mỗi request và không dùng JSON để bù trường.
 
-1. Đọc CSV từ cấu hình đường dẫn. CSV là nguồn chuẩn; JSON chỉ là bản xuất, không được đọc song song để bổ sung dữ liệu.
-2. Kiểm tra các cột bắt buộc: id, ten_san_pham, hang, gia_ban, ram_gb, rom_gb, pin_mah và tags_nhu_cau.
-3. Chuyển trường số sang kiểu số; báo lỗi rõ nếu giá hoặc thông số không thể chuyển đổi.
-4. Tách tags_nhu_cau theo dấu phẩy thành tập tag, sau khi bỏ khoảng trắng.
-5. Chuẩn hóa hãng để so khớp không phân biệt hoa thường.
-6. Kiểm tra id không rỗng và duy nhất; cho phép trường tùy chọn như ảnh, URL hoặc một số thông số bị thiếu, nhưng không hiển thị giá trị bịa để thay thế.
-7. Giữ id làm khóa sản phẩm; giữ hinh_anh và url cho thẻ kết quả.
-8. Nạp dữ liệu một lần và dùng lại trong các truy vấn.
+#### Schema tối thiểu
 
-**Vì sao không đọc CSV lại ở mỗi câu hỏi?** Danh mục nhỏ có thể giữ trong bộ nhớ của ứng dụng. Nạp một lần giảm thao tác I/O, tránh lặp mã và giúp hiệu năng ổn định hơn. Khi CSV được cập nhật trong lúc phát triển, có thể khởi động lại ứng dụng để nạp lại.
+- `products`: `id` (giữ ID gốc trong CSV làm khóa chính), tên, hãng, giá VND, hệ điều hành, chip, RAM/ROM, pin, sạc, màn hình, tần số quét, camera trước/sau, URL ảnh và URL sản phẩm; có thể thêm `created_at`/`updated_at` để theo dõi thay đổi.
+- `tags`: khóa chính, `slug` duy nhất và tên hiển thị nếu cần.
+- `product_tags`: khóa ngoại tới `products` và `tags`, khóa chính ghép (`product_id`, `tag_id`) để tránh gắn tag trùng cho cùng sản phẩm.
+- Không lưu toàn bộ `tags_nhu_cau` dạng chuỗi phẩy trong bảng sản phẩm. Seed sẽ tách chuỗi CSV thành bản ghi quan hệ; truy vấn tag dùng join chính xác.
 
-Giá phải được mô tả là giá ghi trong CSV và không đảm bảo là giá hiện tại. Nếu có ngày thu thập được xác nhận, lưu ngày đó trong metadata và hiển thị; nếu không có, không suy đoán ngày.
+`products.id` giữ ID nguồn giúp detail/compare và kiểm tra seed ổn định. Khóa chính, unique, not-null và foreign key phải được áp dụng trong database chứ không chỉ dựa vào kiểm tra của form/app.
 
-Các tên trường trong schema tool được ánh xạ rõ về cột CSV: `min_refresh_rate_hz` → `tan_so_quet_hz`; các giá đều tính bằng VND, RAM/ROM bằng GB và pin bằng mAh.
+#### Quy trình thiết lập và dùng
+
+1. Cài PostgreSQL và tạo database cùng hai role riêng: `phone_admin` để chạy migration/seed và `phone_app` để chạy Flask. Không dùng tài khoản superuser khi chạy Flask; trong phiên bản chỉ tư vấn, `phone_app` chỉ cần quyền SELECT.
+2. Lưu `DATABASE_URL` và `DATABASE_ADMIN_URL` trong `.env` local; chỉ commit `.env.example` với giá trị giả. App đọc `DATABASE_URL`; Alembic/seed dùng credential admin. Ví dụ: `postgresql+psycopg://phone_app:...@localhost:5432/phone_advisor`.
+3. Khai báo SQLAlchemy models trong `src/phone_advisor/db/models.py`; tạo migration Alembic cho ba bảng và các ràng buộc bằng role admin. Review migration được autogenerate trước khi áp dụng.
+4. Tạo engine và `sessionmaker` một lần lúc khởi tạo app. Mỗi request mở một Session, commit khi có thao tác ghi, rollback khi lỗi và luôn đóng Session. Không giữ Session dùng chung toàn cục giữa requests.
+5. Chạy migration bằng lệnh tường minh, sau đó chạy lệnh seed (ví dụ `python -m scripts.seed_catalog`) để kiểm tra CSV rồi nhập dữ liệu. Seed mặc định chỉ chạy khi bảng sản phẩm chưa có dữ liệu; nhập lại cần cờ `--upsert` được định nghĩa rõ.
+6. Seed ánh xạ ID, kiểu số, null và tag; kiểm tra khóa trùng/giá trị sai trước khi commit transaction. Nếu lỗi giữa chừng thì rollback toàn bộ batch, tránh catalog nạp dở. Nếu cột ID dùng identity/sequence để hỗ trợ thêm sản phẩm sau này, đồng bộ sequence tới ID lớn nhất sau khi nạp ID nguồn.
+7. Viết catalog repository truy vấn PostgreSQL. Các bộ lọc hãng/giá/thông số/tag chạy ở database; ranking sở thích có thể thực hiện ở Python sau khi SQL đã lọc tập ứng viên.
+8. Trong phạm vi hiện tại, thay đổi catalog bằng lệnh import có chủ đích và ghi lại nguồn/ngày nhập. Nếu sau này làm UI quản trị, route riêng phải xác thực/phân quyền và ghi database qua repository. Không xóa sản phẩm chỉ vì nó vắng mặt trong CSV mới nếu chưa chọn quy tắc đồng bộ có chủ ý.
+
+**Vì sao dùng database cho website mô phỏng?** Dữ liệu tồn tại sau khi tắt/mở server; nhiều request cùng truy cập một nguồn; ràng buộc quan hệ giúp bảo vệ tính nhất quán; backend có thể thay đổi dữ liệu mà không sửa file CSV. CSV là cách chuyển dữ liệu ban đầu vào hệ thống, tương tự một đợt import.
+
+Giá lưu trong database vẫn chỉ là snapshot từ bộ dữ liệu nhập vào, không mặc nhiên là giá thị trường hiện tại. Nếu có ngày thu thập đã xác nhận, lưu metadata/ngày cập nhật; nếu không, không suy đoán ngày.
+
+Các tên trường trong schema tool ánh xạ đến cột model/database, ví dụ `min_refresh_rate_hz` → `Product.tan_so_quet_hz`; giá tính bằng VND, RAM/ROM bằng GB và pin bằng mAh.
 
 ### 5.2. Truy vấn theo điều kiện
 
@@ -431,15 +468,15 @@ choi_game
 pin_trau
 ~~~
 
-Một số dòng trong CSV khớp các điều kiện này:
+Một số dòng dữ liệu hiện có khớp các điều kiện này:
 
-| Sản phẩm | Giá trong CSV | RAM | Pin | Dấu hiệu liên quan |
+| Sản phẩm | Giá trong database | RAM | Pin | Dấu hiệu liên quan |
 |---|---:|---:|---:|---|
 | Xiaomi Redmi Note 17 Pro Max 8GB/256GB | 14.190.000đ | 8GB | 10.000mAh | choi_game, pin_trau, pin_khung |
 | Xiaomi POCO X8 Pro 5G 8GB/256GB | 12.990.000đ | 8GB | 6.500mAh | choi_game, pin_trau, chip_gaming |
 | Xiaomi Redmi Note 15 Pro 5G 8GB/256GB | 8.290.000đ | 8GB | 6.580mAh | choi_game, pin_trau, chip_gaming |
 
-Câu trả lời nên nêu rõ sự đánh đổi, ví dụ: máy có pin lớn nhất, máy có tag chip_gaming, và lựa chọn giá thấp hơn. Không nên khẳng định một máy “chơi game tốt nhất” chỉ từ tên chip hoặc suy đoán ngoài CSV.
+Câu trả lời nên nêu rõ sự đánh đổi, ví dụ: máy có pin lớn nhất, máy có tag chip_gaming, và lựa chọn giá thấp hơn. Không nên khẳng định một máy “chơi game tốt nhất” chỉ từ tên chip hoặc suy đoán ngoài dữ liệu trong database.
 
 ---
 
@@ -478,7 +515,7 @@ Dùng cho `recommend` và `search`. Khi là `search`, truyền `preferences: []`
 }
 ~~~
 
-Quy tắc xác thực: hãng phải thuộc danh sách trong CSV; tag phải thuộc tập tag đã nạp; ID loại trừ phải tồn tại; giá và thông số là số không âm; nếu có cả min/max thì min không lớn hơn max; cờ `*_inclusive` là boolean; `limit` là số nguyên từ 1 đến 3. Mọi `required_tags` đều phải khớp (AND); với mỗi `required_tag_groups`, ít nhất một tag phải khớp; sản phẩm có bất kỳ `excluded_tags` nào đều bị loại. Mỗi `preferences` có `any_of` không rỗng và `priority` là số nguyên 1–3; preference chỉ tác động thứ tự.
+Quy tắc xác thực: hãng phải thuộc danh sách trong database; tag phải thuộc tập tag đã nạp; ID loại trừ phải tồn tại; giá và thông số là số không âm; nếu có cả min/max thì min không lớn hơn max; cờ `*_inclusive` là boolean; `limit` là số nguyên từ 1 đến 3. Mọi `required_tags` đều phải khớp (AND); với mỗi `required_tag_groups`, ít nhất một tag phải khớp; sản phẩm có bất kỳ `excluded_tags` nào đều bị loại. Mỗi `preferences` có `any_of` không rỗng và `priority` là số nguyên 1–3; preference chỉ tác động thứ tự.
 
 Đầu ra thành công gồm `status: "ok"`, `items` (các bản ghi sản phẩm đã chọn trường cần dùng), `applied_filters` và `matched_preferences`. Nếu không có kết quả, trả `status: "not_found"` cùng `applied_filters`; không tự bỏ điều kiện để tìm kết quả gần đúng.
 
@@ -486,11 +523,11 @@ Quy tắc xác thực: hãng phải thuộc danh sách trong CSV; tag phải thu
 
 Dùng khi khách hỏi thông tin một mẫu cụ thể. Tool nhận `product_id` đã được backend phân giải. Nếu tên người dùng khớp nhiều ID, backend hỏi lại trước khi gọi tool; tool không tự chọn phiên bản.
 
-Đầu vào là `{ "product_id": 57 }`, trong đó ID phải tồn tại trong catalog. Đầu ra là `{ "status": "ok", "item": { ... } }` với trường sản phẩm từ CSV; ID không tồn tại trả `status: "not_found"`.
+Đầu vào là `{ "product_id": 57 }`, trong đó ID phải tồn tại trong catalog. Đầu ra là `{ "status": "ok", "item": { ... } }` với trường sản phẩm đã truy vấn từ database; ID không tồn tại trả `status: "not_found"`.
 
-**Xử lý đa phiên bản ROM:** CSV có nhiều dòng cho cùng 1 model chỉ khác ROM (ví dụ iPhone 17 Pro Max có bản 256GB, 512GB và 1TB). Khi người dùng hỏi tên model mà không nêu dung lượng:
+**Xử lý đa phiên bản ROM:** database có thể có nhiều dòng cho cùng 1 model chỉ khác ROM (ví dụ iPhone 17 Pro Max có bản 256GB, 512GB và 1TB). Khi người dùng hỏi tên model mà không nêu dung lượng:
 
-1. Nhóm các dòng CSV theo tên model gốc (bỏ phần "256GB/512GB/1TB").
+1. Nhóm các bản ghi theo tên model gốc (bỏ phần "256GB/512GB/1TB").
 2. Nếu nhóm có nhiều hơn 1 dòng → trả danh sách phiên bản kèm giá:
 
 ~~~text
@@ -505,9 +542,9 @@ Bạn muốn xem phiên bản nào?
 
 ### 6.3. compare_phones
 
-Dùng để so sánh 2–3 sản phẩm theo trường có trong CSV: hệ điều hành, giá, RAM, ROM, công suất sạc, pin, màn hình, camera và tags. Không tạo kết luận không có dữ liệu hỗ trợ.
+Dùng để so sánh 2–3 sản phẩm theo trường có trong database: hệ điều hành, giá, RAM, ROM, công suất sạc, pin, màn hình, camera và tags. Không tạo kết luận không có dữ liệu hỗ trợ.
 
-Đầu vào là `{ "product_ids": [57, 63] }`, gồm đúng 2 hoặc 3 ID đã xác định. Đầu ra giữ cùng thứ tự ID, ví dụ `{ "status": "ok", "items": [{...}, {...}] }`, và trả các trường có trong CSV; trường thiếu được trả là `null`, không được suy đoán. Nếu có ID không tồn tại, trả `not_found` cho toàn bộ yêu cầu thay vì so sánh một phần.
+Đầu vào là `{ "product_ids": [57, 63] }`, gồm đúng 2 hoặc 3 ID đã xác định. Đầu ra giữ cùng thứ tự ID, ví dụ `{ "status": "ok", "items": [{...}, {...}] }`, và trả các trường có trong database; trường thiếu được trả là `null`, không được suy đoán. Nếu có ID không tồn tại, trả `not_found` cho toàn bộ yêu cầu thay vì so sánh một phần.
 
 **Lưu ý khi so sánh chip:** cột `chip_cpu` là chuỗi mô tả tự do (ví dụ "Apple A19 Pro 6 nhân", "Snapdragon 8s Gen 4"). Khi so sánh, chỉ **liệt kê tên chip** của từng máy, không được kết luận chip nào "mạnh hơn" hay "yếu hơn" nếu không có dữ liệu benchmark đáng tin cậy.
 
@@ -529,15 +566,15 @@ Dùng cho yêu cầu khám phá danh mục như “Có những hãng nào?” ho
 }
 ~~~
 
-`page` là số nguyên từ 1; `page_size` mặc định 20 và là số nguyên từ 1 đến 20. Đầu ra có `status`, `items`, `total`, `page`, `page_size` và `facets.brands` (hãng phân biệt trong toàn bộ catalog). Kết quả phải sắp ổn định theo giá tăng dần rồi ID. Nếu chỉ hỏi danh sách hãng, trả các hãng phân biệt có trong CSV và không gọi LLM để suy ra hãng mới.
+`page` là số nguyên từ 1; `page_size` mặc định 20 và là số nguyên từ 1 đến 20. Đầu ra có `status`, `items`, `total`, `page`, `page_size` và `facets.brands` (hãng phân biệt trong toàn bộ catalog). Kết quả phải sắp ổn định theo giá tăng dần rồi ID. Nếu chỉ hỏi danh sách hãng, truy vấn các hãng phân biệt trong database và không gọi LLM để suy ra hãng mới.
 
 ### 6.5. Schema đầu ra và lỗi chung
 
-Mọi tool trả dữ liệu JSON có cấu trúc. `ProductCard` dùng cho kết quả gợi ý gồm `id`, `ten_san_pham`, `hang`, `gia_ban`, `ram_gb`, `rom_gb`, `chip_cpu`, `pin_mah`, `man_hinh_inch`, `tan_so_quet_hz`, `tags_nhu_cau`, `hinh_anh` và `url`. Tags trả về dưới dạng mảng tag chuẩn; số liệu trả dưới dạng số hoặc `null`. Detail/compare có thể trả thêm `he_dieu_hanh`, `sac_w`, `camera_sau_mp` và `camera_truoc_mp` nếu có trong CSV. Chỉ gửi các sản phẩm được chọn và các trường cần cho câu trả lời, không gửi toàn bộ catalog.
+Mọi tool trả dữ liệu JSON có cấu trúc. `ProductCard` dùng cho kết quả gợi ý gồm `id`, `ten_san_pham`, `hang`, `gia_ban`, `ram_gb`, `rom_gb`, `chip_cpu`, `pin_mah`, `man_hinh_inch`, `tan_so_quet_hz`, `tags_nhu_cau`, `hinh_anh` và `url`. Tags trả về dưới dạng mảng tag chuẩn; số liệu trả dưới dạng số hoặc `null`. Detail/compare có thể trả thêm `he_dieu_hanh`, `sac_w`, `camera_sau_mp` và `camera_truoc_mp` nếu có trong database. Chỉ gửi các sản phẩm được chọn và các trường cần cho câu trả lời, không gửi toàn bộ catalog.
 
 Kết quả nghiệp vụ dùng `status: "ok"` hoặc `"not_found"`. Đầu vào không hợp lệ bị từ chối ở backend bằng `{ "error": { "code": "VALIDATION_ERROR", "message": "..." } }`; lỗi Ollama/catalog dùng `SERVICE_UNAVAILABLE`. Nội dung lỗi dành cho log kỹ thuật không được đưa nguyên văn cho người dùng. Yêu cầu mơ hồ được xử lý bằng hỏi lại trước khi gọi tool, không phải lỗi tool.
 
-Các tool chỉ đọc CSV. Tool detail và compare nhận ID, không nhận câu lệnh hoặc đường dẫn tùy ý. Backend xác thực ID thuộc catalog trước khi trả dữ liệu.
+Các tool chỉ truy vấn database bằng repository đã định nghĩa. Tool detail và compare nhận ID, không nhận câu lệnh SQL hoặc đường dẫn tùy ý. Backend xác thực ID thuộc catalog trước khi trả dữ liệu.
 
 ### Quy trình an toàn cho một lần gọi tool
 
@@ -548,9 +585,9 @@ Các tool chỉ đọc CSV. Tool detail và compare nhận ID, không nhận câ
 5. Kết quả được trả về Agent dưới dạng dữ liệu có cấu trúc.
 6. Agent viết câu trả lời dựa trên kết quả đó.
 
-Giới hạn tối đa hai lần gọi tool trong một lượt hội thoại. Nếu lời gọi lỗi hoặc model lặp lại, dừng vòng lặp và trả thông báo phù hợp. CSV chỉ được đọc; không cung cấp tool sửa, xóa hoặc ghi đè dữ liệu.
+Giới hạn tối đa hai lần gọi tool trong một lượt hội thoại. Nếu lời gọi lỗi hoặc model lặp lại, dừng vòng lặp và trả thông báo phù hợp. Agent chỉ có tool đọc; không cấp quyền ghi database cho Agent. Nếu sau này có trang quản trị, thao tác ghi phải qua route riêng có xác thực, kiểm tra đầu vào và phân quyền.
 
-Câu người dùng, kết quả Ollama và mọi trường CSV đều là dữ liệu không đáng tin cậy, không phải chỉ dẫn hệ thống. Không để nội dung từ người dùng/CSV thay đổi whitelist, schema hoặc chính sách lọc.
+Câu người dùng, kết quả Ollama và mọi trường sản phẩm trong database đều là dữ liệu không đáng tin cậy, không phải chỉ dẫn hệ thống. Không để nội dung từ người dùng/database thay đổi whitelist, schema hoặc chính sách lọc.
 
 ### 6.6. Mẫu system prompt cho Ollama
 
@@ -562,8 +599,8 @@ phù hợp từ danh mục sản phẩm có sẵn.
 
 QUY TẮC BẮT BUỘC:
 1. Chỉ nêu giá và thông số sản phẩm có trong kết quả tool. Không tự bịa tồn kho,
-   chính sách bảo hành hoặc dữ liệu không có trong CSV.
-2. Khi nêu giá, nói rõ đây là giá ghi trong CSV, không đảm bảo là giá hiện tại.
+   chính sách bảo hành hoặc dữ liệu không có trong database.
+2. Khi nêu giá, nói rõ đây là giá trong dữ liệu website đã nhập, không đảm bảo là giá hiện tại.
    Chỉ nêu ngày dữ liệu nếu nguồn có lưu ngày đó.
 3. Không được tự đánh giá chip mạnh/yếu chỉ từ tên chip. Nếu cần so sánh
    hiệu năng, chỉ liệt kê tên chip và tag chip_gaming (nếu có).
@@ -571,7 +608,7 @@ QUY TẮC BẮT BUỘC:
    khách muốn nới điều kiện nào.
 5. Trả lời bằng tiếng Việt, tự nhiên và thân thiện.
 6. Không dùng ngôn ngữ quảng cáo: "rẻ nhất thị trường", "mạnh nhất phân khúc",
-   "giá mới nhất" nếu CSV không có căn cứ.
+   "giá mới nhất" nếu database không có căn cứ.
 7. Mỗi gợi ý cần kèm lý do ngắn gọn dựa trên trường hoặc tag có trong kết quả.
 8. Không tạo nội dung HTML/JavaScript. Lời chào và câu ngoài phạm vi do backend
    trả bằng mẫu cố định; không cần gọi tool.
@@ -602,7 +639,7 @@ Lưu prompt này trong thư mục `agent/prompts/` dưới dạng file text ho�
 
 **Catalog:** lọc theo hãng và giá; giữ mọi máy thỏa điều kiện bắt buộc; sau đó xếp hạng theo sở thích khớp.
 
-**Agent trả lời:** đưa tối đa ba sản phẩm, mỗi sản phẩm có giá theo CSV, RAM, pin và lý do được chọn. Ghi chú giá là theo dữ liệu trong bộ CSV, không gọi là giá trực tuyến hiện tại.
+**Agent trả lời:** đưa tối đa ba sản phẩm, mỗi sản phẩm có giá theo database, RAM, pin và lý do được chọn. Ghi chú giá là theo dữ liệu website đã nhập, không gọi là giá trực tuyến hiện tại.
 
 ### Trường hợp 2 — Thiếu ngân sách
 
@@ -623,7 +660,7 @@ Lưu prompt này trong thư mục `agent/prompts/` dưới dạng file text ho�
 
 **Người dùng:** “Tìm iPhone dưới 3 triệu, RAM ít nhất 16GB.”
 
-Nếu CSV không có sản phẩm đạt cả hai điều kiện, bot không được tự bỏ điều kiện RAM hoặc ngân sách. Trả lời không có kết quả và hỏi người dùng muốn nới điều kiện nào.
+Nếu database không có sản phẩm đạt cả hai điều kiện, bot không được tự bỏ điều kiện RAM hoặc ngân sách. Trả lời không có kết quả và hỏi người dùng muốn nới điều kiện nào.
 
 ---
 
@@ -638,7 +675,7 @@ Giao diện tối thiểu nên có:
 - tên, hãng, giá, RAM/ROM, chip, pin và tag phù hợp;
 - liên kết url nếu có.
 
-Mỗi gợi ý nên có một câu giải thích gắn với nhu cầu cụ thể, chẳng hạn “khớp ngân sách và có tag pin_trau”. Không tạo nội dung quảng cáo như “rẻ nhất thị trường”, “giá mới nhất” hay “mạnh nhất phân khúc” nếu CSV không chứa căn cứ tương ứng.
+Mỗi gợi ý nên có một câu giải thích gắn với nhu cầu cụ thể, chẳng hạn “khớp ngân sách và có tag pin_trau”. Không tạo nội dung quảng cáo như “rẻ nhất thị trường”, “giá mới nhất” hay “mạnh nhất phân khúc” nếu database không chứa căn cứ tương ứng.
 
 ### Hợp đồng API chat
 
@@ -663,7 +700,9 @@ Giao diện phải escape nội dung văn bản, không render HTML do LLM tạo
 
 Tài liệu ban đầu nêu máy có Intel Core Ultra 7, RTX 3050 Ti Laptop 4GB VRAM, 16GB RAM, Ollama và các model Qwen cài sẵn. Đây là bối cảnh triển khai local; không nên xem các con số tốc độ hoặc mức VRAM ước tính là cam kết.
 
-- Đọc tên model, đường dẫn dữ liệu và cấu hình máy chủ từ cấu hình ứng dụng thay vì rải giá trị cố định trong mã.
+- Đọc `DATABASE_URL`, tên model và cấu hình máy chủ từ biến môi trường/cấu hình ứng dụng; không ghi mật khẩu database vào mã hoặc Git.
+- Chạy migration Alembic tường minh trước khi khởi động phiên bản mới; không tự tạo/sửa schema trong lúc Flask start bằng `create_all`.
+- Dùng quyền database tối thiểu: web tư vấn chỉ cần đọc catalog; migration/import dùng credential bảo trì riêng. Đóng Session sau request và xử lý lỗi database có timeout/thông báo phù hợp.
 - Đọc `SECRET_KEY`, thời hạn session và timeout gọi Ollama từ cấu hình môi trường; không ghi khóa bí mật vào mã nguồn.
 - Khi dùng cookie session, bật `HttpOnly`, `SameSite` và `Secure` trên HTTPS; bảo vệ `POST /api/chat` khỏi CSRF và chỉ cho phép CORS từ origin được cấu hình.
 - Đo thời gian khởi động, thời gian phản hồi, mức RAM/VRAM và tốc độ sinh token trên chính máy chạy đồ án.
@@ -677,22 +716,21 @@ Không khẳng định chatbot luôn trả lời dưới một giây, toàn bộ
 
 ## 10. Các bước thực hiện theo thứ tự
 
-| Bước | Cách làm | Vì sao | Kết quả cần có |
-|---|---|---|---|
-| 1. Chốt phạm vi và ý định | Chỉ hỗ trợ gợi ý, tìm, xem chi tiết, so sánh và duyệt danh mục điện thoại | Tránh ý định chồng lấn và tính năng không có dữ liệu | Định nghĩa hành vi mỗi intent, điều kiện cứng và sở thích mềm |
-| 2. Chốt hợp đồng | Định nghĩa schema NLP, tool, API chat, kết quả và lỗi | Caller và module cần hiểu cùng một dữ liệu | Ví dụ JSON hợp lệ/không hợp lệ cho mỗi hợp đồng |
-| 3. Kiểm tra dữ liệu | Đọc header, kiểu dữ liệu, tag, dòng trống, id trùng và liên kết ảnh/URL | Công cụ không thể tư vấn đúng nếu dữ liệu đầu vào sai | CSV nguồn chuẩn, bảng mô tả cột và các vấn đề dữ liệu |
-| 4. Tạo khung ứng dụng | Tạo Flask entry point, cấu hình và module web/NLP/agent/catalog | Phân tách trách nhiệm giúp debug và trình bày đồ án rõ hơn | Ứng dụng chạy được với route cơ bản |
-| 5. Làm catalog trước | Nạp CSV một lần, xác thực cột, viết lọc hãng/giá/thông số/tag | Có thể kiểm tra độ đúng của tìm kiếm độc lập với LLM | Truy vấn cho kết quả xác định |
-| 6. Làm NLP baseline | Viết normalize, từ điển alias, intent và slot extraction theo ví dụ | Tạo thành phần NLP có thể giải thích, không phụ thuộc hoàn toàn vào prompt | Câu tự nhiên được chuyển thành cấu trúc chuẩn |
-| 7. Làm ranking | Lọc điều kiện cứng rồi xếp hạng sở thích mềm theo quy tắc cố định | Tránh trả kết quả vi phạm điều kiện và giúp giải thích gợi ý | Top sản phẩm ổn định cho cùng đầu vào |
-| 8. Thêm Agent | Gửi yêu cầu đã xác thực cho Ollama; giới hạn tool bằng registry/schema | Agent diễn đạt tự nhiên nhưng không thay nghiệp vụ | Agent gọi đúng công cụ và tổng hợp dựa trên dữ liệu |
-| 9. Làm giao diện chat | Kết nối API, cô lập state theo phiên và hiển thị product cards | Giúp người dùng xem kết quả thuận tiện, không lẫn hội thoại | Demo được toàn bộ luồng từ câu hỏi đến gợi ý |
-| 10. Xử lý lỗi và đánh giá | Bao phủ dữ liệu sai, không có kết quả, tool sai, Ollama lỗi; đo intent/slot và tuân thủ lọc | Phân biệt lỗi NLP, dữ liệu và diễn đạt của LLM | Bộ câu hỏi đánh giá độc lập, tiêu chí đạt và ví dụ lỗi |
+| Buổi | Cách làm | Vì sao | Kết quả cần có |
+|---:|---|---|---|
+| 1 | Chốt phạm vi, tạo môi trường Python và Flask app tối thiểu | Xác nhận nền chạy trước khi thêm nhiều lớp | App chạy local và cấu hình cơ bản |
+| 2 | Kiểm tra header, kiểu dữ liệu, tag, ID và URL trong CSV | Phát hiện lỗi đầu vào trước khi ghi vào database | Data dictionary và danh sách vấn đề |
+| 3 | Tạo PostgreSQL, SQLAlchemy models và migration Alembic | Schema/ràng buộc phải có trước khi import | Ba bảng products/tags/product_tags được tạo bằng migration |
+| 4 | Seed CSV bằng lệnh riêng, rồi tạo repository truy vấn DB | Tách import khỏi runtime và bảo đảm dữ liệu bền vững | Catalog đọc DB; Flask không đọc CSV |
+| 5–6 | Làm search/browse, recommend/detail/compare | Xác nhận nghiệp vụ sản phẩm độc lập với NLP/LLM | Bộ catalog có thứ tự ổn định và đúng điều kiện |
+| 7–9 | Làm chuẩn hóa, intent/slots và state hội thoại | Câu tiếng Việt cần thành request có cấu trúc, giữ đúng ngữ cảnh | Request đã xác thực và câu hỏi làm rõ khi cần |
+| 10–11 | Tạo whitelist tool, sau đó tích hợp Agent/Ollama | Chỉ cho model gọi nghiệp vụ được phép | Tool an toàn; có timeout/fallback |
+| 12–13 | Tạo API Flask và giao diện chat | Hoàn chỉnh luồng trình duyệt → API → catalog/database | Người dùng hỏi, xem và tiếp tục hội thoại |
+| 14 | Đánh giá dữ liệu, API, UI và chuẩn bị kịch bản demo | Tìm lỗi theo từng lớp và giúp demo lặp lại được | Báo cáo đánh giá cùng hướng dẫn chạy |
 
 ### Thứ tự làm khuyến nghị
 
-Hoàn thành bước 1–6 và xác nhận kết quả catalog/NLP trước khi tích hợp Ollama. Nếu bắt đầu bằng prompt/Agent trước, rất khó phân biệt lỗi do model hiểu sai hay do truy vấn dữ liệu sai.
+Hoàn thành Buổi 1–10 và xác nhận database, catalog, parser cùng whitelist tool trước khi tích hợp Ollama ở Buổi 11. Nếu Agent được làm trước, khó phân biệt lỗi do model hiểu sai với lỗi truy vấn database hoặc parser.
 
 ---
 
@@ -721,16 +759,23 @@ Mọi trường hợp kiểm tra điều kiện cứng phải đạt 100% tuân 
 
 ## 12. Giới hạn và hướng mở rộng
 
-- Giá trong CSV chỉ phản ánh dữ liệu được cung cấp; chưa có cơ chế đồng bộ giá trực tuyến.
+- Giá trong PostgreSQL chỉ phản ánh dữ liệu đã nhập; chưa có cơ chế đồng bộ giá trực tuyến.
 - Tag là nhãn của bộ dữ liệu; chất lượng gợi ý phụ thuộc tag được gán chính xác.
 - Chip CPU đang là chuỗi mô tả. Muốn xếp hạng hiệu năng chip đáng tin cậy cần bổ sung dữ liệu chuẩn hóa hoặc benchmark có nguồn.
 - Chưa có lịch sử mua hàng, tồn kho, màu sắc, cửa hàng hoặc chính sách bảo hành.
-- Chỉ thêm RAG khi có kho tài liệu dạng văn bản cần tìm kiếm; không thêm vector database chỉ để truy vấn CSV.
-- Khi đồ án cần mở rộng, có thể thêm đánh giá chất lượng gợi ý, nhập bộ dữ liệu mới, hoặc thay CSV bằng cơ sở dữ liệu mà vẫn giữ giao diện catalog service.
+- Chỉ thêm RAG khi có kho tài liệu dạng văn bản cần tìm kiếm; không thêm vector database chỉ để truy vấn dữ liệu quan hệ.
+- Khi đồ án cần mở rộng, có thể thêm trang quản trị CRUD sản phẩm, nhập bộ dữ liệu mới, lịch sử giá/tồn kho hoặc đánh giá chất lượng gợi ý mà vẫn giữ giao diện catalog service.
 
 ---
 
 ## 13. Kết luận
 
-Kiến trúc phù hợp nhất với phạm vi hiện tại là **Flask + NLP tiếng Việt dạng kết hợp + Ollama Agent gọi công cụ + catalog CSV truy vấn xác định**. NLP hiểu câu hỏi, Agent điều phối hội thoại, còn catalog chịu trách nhiệm tìm và xếp hạng. Cách phân chia này dễ làm theo từng bước, dễ giải thích trong môn Xử lý ngôn ngữ tự nhiên và tránh để LLM tự bịa thông tin sản phẩm.
+Kiến trúc phù hợp nhất với phạm vi hiện tại là **Flask + PostgreSQL + SQLAlchemy/Alembic + NLP tiếng Việt dạng kết hợp + Ollama Agent gọi công cụ**. CSV chỉ seed dữ liệu ban đầu; PostgreSQL là nguồn chuẩn khi web chạy. NLP hiểu câu hỏi, Agent điều phối và diễn đạt, còn catalog truy vấn và xếp hạng dữ liệu xác định. Cách phân chia này mô phỏng web thật mà vẫn dễ làm theo từng bước và tránh để LLM tự bịa thông tin sản phẩm.
+
+### Tài liệu kỹ thuật tham khảo
+
+- [PostgreSQL: constraints và bảng](https://www.postgresql.org/docs/current/ddl-constraints.html)
+- [SQLAlchemy 2.0: quản lý Session](https://docs.sqlalchemy.org/en/20/orm/session_basics.html)
+- [SQLAlchemy 2.0: PostgreSQL và psycopg](https://docs.sqlalchemy.org/en/20/dialects/postgresql.html)
+- [Alembic: autogenerate migrations](https://alembic.sqlalchemy.org/en/latest/autogenerate.html) — migration tự sinh cần được review trước khi chạy.
 
