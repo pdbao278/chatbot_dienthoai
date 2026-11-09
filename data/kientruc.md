@@ -65,6 +65,23 @@ flowchart TD
 | PostgreSQL | Lưu sản phẩm/tag và là nguồn dữ liệu runtime duy nhất | Mô phỏng cách website thật lưu dữ liệu bền vững và phục vụ nhiều request qua backend |
 | Lệnh seed CSV | Kiểm tra rồi nhập CSV vào PostgreSQL khi khởi tạo/cập nhật dữ liệu | Tách nhập dữ liệu khỏi phục vụ web; không làm chậm hoặc ghi đè dữ liệu khi app khởi động |
 
+### Chi tiết các bước và công nghệ trong luồng xử lý
+
+1. **Người dùng:** Nhập yêu cầu tìm kiếm và xem kết quả. *(Công nghệ: Trình duyệt Web)*
+2. **Giao diện Chat Web:** Nhận tin nhắn từ người dùng và hiển thị câu trả lời kèm thẻ sản phẩm. *(Công nghệ: React / Vue / HTML, CSS, JS)*
+3. **FastAPI Web API:** Tiếp nhận yêu cầu từ Web và chuyển vào hệ thống xử lý. *(Công nghệ: Python, FastAPI)*
+4. **NLP & Dialogue State:** Làm sạch câu chữ, hiểu ý định mua gì và lấy ra các thông số (giá, loại máy...). *(Công nghệ: Python NLP, Regex)*
+5. **Policy Guardrail (Kiểm tra):** Xem câu hỏi có rõ ràng, hợp lệ không để chia nhánh:
+   - *Nếu Mơ hồ / Mâu thuẫn:* Chuyển sang bước 6 để hỏi lại.
+   - *Nếu Hợp lệ:* Chuyển sang bước 7 cho AI xử lý.
+   *(Công nghệ: Python Rules / Guardrails)*
+6. **Hỏi lại người dùng (khi mơ hồ):** Gửi lại câu hỏi nhờ người dùng nói rõ hơn thông tin. *(Công nghệ: Python Templates)*
+7. **AI Agent (Ollama) + Tool Whitelist (khi hợp lệ):** AI suy nghĩ và gọi công cụ tìm kiếm sản phẩm được cấp phép. *(Công nghệ: Ollama, Local LLM như Llama 3 / Qwen)*
+8. **Catalog Service:** Nhận lệnh từ AI để tìm sản phẩm đúng yêu cầu trong kho dữ liệu. *(Công nghệ: Python Service, ORM)*
+9. **PostgreSQL Local:** Nơi lưu trữ toàn bộ dữ liệu gốc của sản phẩm (giá, tên, tồn kho...). *(Công nghệ: PostgreSQL Database)*
+10. **Kết quả sản phẩm:** Trả danh sách sản phẩm tìm được về cho AI Agent. *(Công nghệ: Dữ liệu JSON)*
+11. **Câu trả lời + Product Cards:** AI soạn câu trả lời và tạo thẻ sản phẩm hoàn chỉnh gửi về màn hình chat. *(Công nghệ: JSON, UI Card Components)*
+
 ---
 
 ## 3. Cấu trúc thư mục đề xuất
