@@ -1,0 +1,30 @@
+# Python virtual environment
+.venv/
+env/
+venv/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment variables & secrets
+.env
+.env.local
+*.secret
+
+# IDEs & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs & temp data
+*.log
+tmp/
+

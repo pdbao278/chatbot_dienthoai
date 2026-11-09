@@ -4,7 +4,7 @@ Chỉ đánh dấu hoàn thành sau khi đạt tiêu chí trong file hướng d�
 
 | Trạng thái | Buổi | Ngày làm | Ghi chú/đầu ra |
 |---|---|---|---|
-| [ ] | [Buổi 1 — Môi trường và khung dự án](buoi_01_moi_truong_va_khung_du_an.md) |  |  |
+| [x] | [Buổi 1 — Môi trường và khung dự án](buoi_01_moi_truong_va_khung_du_an.md) | 2026-11-09 | Hoàn thành setup .venv, pyproject.toml, FastAPI app tối thiểu, test health check pass. |
 | [ ] | [Buổi 2 — Kiểm tra dữ liệu](buoi_02_kiem_tra_du_lieu.md) |  |  |
 | [ ] | [Buổi 3 — PostgreSQL và schema](buoi_03_database_schema.md) |  |  |
 | [ ] | [Buổi 4 — Import CSV và repository](buoi_04_csv_seed_repository.md) |  |  |
@@ -21,9 +21,9 @@ Chỉ đánh dấu hoàn thành sau khi đạt tiêu chí trong file hướng d�
 
 ## Ghi chú buổi gần nhất
 
-- **Buổi gần nhất đã hoàn thành:** Chưa có
-- **Ngày làm:**
-- **Việc đã hoàn thành:**
-- **Lệnh/kiểm tra đã chạy:**
-- **Vấn đề còn mở:**
-- **Buổi tiếp theo:** Buổi 1 — Môi trường và khung dự án
+- **Buổi gần nhất đã hoàn thành:** Buổi 1 — Môi trường và khung dự án
+- **Ngày làm:** 2026-11-09
+- **Việc đã hoàn thành:** Thiết lập virtual environment (.venv) Python 3.11, cài đặt các thư viện nền tảng theo requirements.txt và pyproject.toml, tạo khung cấu trúc package `src/phone_advisor`, cấu hình .gitignore, tạo FastAPI app và viết unit test TDD cho endpoint `/health` (PASS 100%).
+- **Lệnh/kiểm tra đã chạy:** `pytest -v` (1 passed), `python -c "from phone_advisor.app import app..."`
+- **Vấn đề còn mở:** Chưa có
+- **Buổi tiếp theo:** [Buổi 2 — Kiểm tra dữ liệu](buoi_02_kiem_tra_du_lieu.md)
