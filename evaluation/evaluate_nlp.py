@@ -100,6 +100,7 @@ def evaluate(test_file: str, parser=None) -> Dict[str, Any]:
         raise FileNotFoundError(f"Không tìm thấy file test: {test_file}")
 
     total_cases = 0
+    total_clarify_cases = 0
     intent_correct = 0
     clarification_correct = 0
     hard_violations = 0
@@ -137,6 +138,7 @@ def evaluate(test_file: str, parser=None) -> Dict[str, Any]:
 
             # Nếu là case mâu thuẫn cần hỏi lại, không chấm tiếp intent/slot
             if exp_clarify:
+                total_clarify_cases += 1
                 continue
 
             # 2. Đánh giá Intent
@@ -183,7 +185,8 @@ def evaluate(test_file: str, parser=None) -> Dict[str, Any]:
                 exclusion_fp += 1
 
     # Tính toán chỉ số
-    intent_acc = (intent_correct / (total_cases - 1)) if total_cases > 1 else 0.0
+    evaluated_intent_cases = total_cases - total_clarify_cases
+    intent_acc = (intent_correct / evaluated_intent_cases) if evaluated_intent_cases > 0 else 0.0
     clarify_acc = clarification_correct / total_cases if total_cases > 0 else 0.0
     brand_p, brand_r, brand_f1 = calculate_metrics(brand_tp, brand_fp, brand_fn)
     excl_p, excl_r, excl_f1 = calculate_metrics(exclusion_tp, exclusion_fp, exclusion_fn)
