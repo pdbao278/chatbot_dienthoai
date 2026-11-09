@@ -1,0 +1,51 @@
+id,text,category,expected_intent,expected_brand,expected_price_min,expected_price_max,price_operator,expected_required_tags,expected_preferences,expected_exclusions,needs_clarification
+1,Tìm Samsung dưới 15 triệu,normal,recommend,Samsung,,15000000,<,,,,false
+2,Gợi ý điện thoại Xiaomi tầm 7 củ,slang,recommend,Xiaomi,,7000000,<=,,,,false
+3,Có máy iPhone nào từ 20 đến 25 triệu không,normal,search,Apple,20000000,25000000,between,,,,false
+4,Tìm điện thoại pin trâu giá rẻ dưới 5 triệu,slang,recommend,,,5000000,<,,pin_trau,,false
+5,Gợi ý máy chơi game mượt tầm 10 củ,slang,recommend,,,10000000,<=,,choi_game|man_hinh_muot,,false
+6,"Không lấy Apple, tìm máy chụp ảnh đẹp dưới 12tr",negation,recommend,,,12000000,<,,chup_anh_dep,Apple,false
+7,"Trừ Samsung ra, gợi ý máy tầm 8 chai",negation,recommend,,,8000000,<=,,,Samsung,false
+8,"Không lấy máy gập, tìm máy flagship trên 20 triệu",negation,recommend,,,20000000,>,flagship,,thiet_ke_gap,false
+9,Tôi không cần máy gập,negation,recommend,,,,,,,,false
+10,Bắt buộc pin ít nhất 6000mAh dưới 6 triệu,required_rule,recommend,,,6000000,<,pin_trau|pin_khung,,,false
+11,Ưu tiên pin trâu nhé,preference,recommend,,,,,,pin_trau,,false
+12,tim xiaomi duoi 8tr choi game,no_accent,recommend,Xiaomi,,8000000,<,,choi_game,,false
+13,goi y ip tam 15 cu chup anh dep,no_accent,recommend,Apple,,15000000,<=,,chup_anh_dep,,false
+14,may nao pin khung gia duoi 7 trieu,no_accent,search,,,7000000,<,,pin_khung,,false
+15,Điện thoại giá tối đa 15 triệu,boundary,recommend,,,15000000,<=,,,,false
+16,Điện thoại giá dưới 15 triệu,boundary,recommend,,,15000000,<,,,,false
+17,Tìm máy giá từ 10 đến 15 triệu,boundary,search,,10000000,15000000,between,,,,false
+18,Tìm máy giá ít nhất 12 triệu,boundary,search,,12000000,,>=,,,,false
+19,Tìm máy trên 15 triệu,boundary,search,,15000000,,>,,,,false
+20,Chi tiết iPhone 17 Pro Max 256GB,detail,detail,Apple,,,,,,,false
+21,Thông số máy Galaxy S24 Ultra,detail,detail,Samsung,,,,,,,false
+22,So sánh iPhone Duo 256GB và iPhone 17 Pro Max 256GB,compare,compare,Apple,,,,,,,false
+23,So sánh Xiaomi 14 và Galaxy S24,compare,compare,,,,,,,,false
+24,Liệt kê tất cả điện thoại Samsung,browse,browse,Samsung,,,,,,,false
+25,Xem danh mục điện thoại OPPO,browse,browse,OPPO,,,,,,,false
+26,Xem tất cả điện thoại có sẵn,browse,browse,,,,,,,,false
+27,"Chào bạn, bot có thể làm gì?",greeting,greeting,,,,,,,,false
+28,Hello shop,greeting,greeting,,,,,,,,false
+29,Shop có bán laptop gaming Asus không?,out_of_scope,out_of_scope,,,,,,,,false
+30,Thời tiết Hà Nội hôm nay thế nào?,out_of_scope,out_of_scope,,,,,,,,false
+31,Tìm máy dưới 5 triệu nhưng lại trên 10 triệu,conflict,recommend,,,,,,,,true
+32,Tìm iPhone giá 500 nghìn,edge_case,recommend,Apple,,500000,<=,,,,false
+33,Tìm máy Tecno giá rẻ cho học sinh sinh viên,normal,recommend,Tecno,,,,hoc_sinh_sinh_vien,,,false
+34,Gợi ý máy vivo selfie đẹp dưới 9 củ,slang,recommend,vivo,,9000000,<=,,selfie_dep,,false
+35,Tìm điện thoại realme sạc nhanh tầm 6 triệu,normal,recommend,realme,,6000000,<=,,sac_nhanh,,false
+36,Có máy Motorola nào hỗ trợ 5G không,normal,search,Motorola,,,,5g,,,false
+37,Gợi ý máy doanh nhân sang trọng trên 30 triệu,normal,recommend,,30000000,,>,doanh_nhan|flagship,,,false
+38,Tìm điện thoại Nothing Phone độc lạ,normal,recommend,Nothing Phone,,,,,,,false
+39,Điện thoại Nubia gaming màn hình mượt dưới 15tr,slang,recommend,Nubia,,15000000,<,,choi_game|chip_gaming|man_hinh_muot,,false
+40,HONOR nào có cổng hồng ngoại tầm 8 củ,slang,search,HONOR,,8000000,<=,,hong_ngoai,,false
+41,Máy nào pin trâu nhất phân khúc 7 triệu,slang,recommend,,,7000000,<=,,pin_trau,,false
+42,Gợi ý điện thoại gập mỏng nhẹ cao cấp,normal,recommend,,,,,thiet_ke_gap|flagship,,,false
+43,Đổi sang Xiaomi giúp mình,multi_turn,recommend,Xiaomi,,,,,,,false
+44,"Tài chính 15 củ quay đầu, thích màn đẹp",slang,recommend,,,15000000,<=,,man_hinh_muot,,false
+45,Khoảng 20 chai có con nào chụp choẹt ngon không,slang,recommend,,,20000000,<=,,chup_anh_dep,,false
+46,Tầm 4 đến 6 củ mua máy gì cho phụ huynh,slang,recommend,,4000000,6000000,between,,pin_trau,,false
+47,Gợi ý máy Apple dưới 10 triệu,normal,recommend,Apple,,10000000,<,,,,false
+48,Tìm máy không có NFC,negation,search,,,,,,,nfc,false
+49,Shop có tuyển nhân viên bán hàng không,out_of_scope,out_of_scope,,,,,,,,false
+50,Máy có bảo hành bao lâu vậy,out_of_scope,out_of_scope,,,,,,,,false
