@@ -10,7 +10,7 @@ Viết lệnh import có kiểm soát để biến CSV đầu vào thành dữ l
 
 ## Vì sao seed phải là lệnh riêng?
 
-Import là một tác vụ thay đổi dữ liệu; nếu tự chạy mỗi lần Flask khởi động, app có thể ghi đè chỉnh sửa, nhập trùng hoặc xóa dữ liệu. Tách seed riêng giúp bạn quyết định khi nào nhập, có thể xem trước số dòng và giữ luồng web gần cách triển khai thật.
+Import là một tác vụ thay đổi dữ liệu; nếu tự chạy mỗi lần ứng dụng khởi động, app có thể ghi đè chỉnh sửa, nhập trùng hoặc xóa dữ liệu. Tách seed riêng giúp bạn quyết định khi nào nhập, có thể xem trước số dòng và giữ luồng web gần cách triển khai thật.
 
 ## Các bước
 
@@ -21,7 +21,7 @@ Import là một tác vụ thay đổi dữ liệu; nếu tự chạy mỗi lầ
 5. **Ánh xạ một dòng vào model.** Giữ nguyên ID nguồn làm `Product.id`; giữ giá theo số nguyên VND. Với mỗi tag, lấy hoặc tạo bản ghi `Tag`, rồi liên kết qua `product_tags`. Không lưu nguyên chuỗi tags vào `Product`.
 6. **Ghi theo transaction.** Nếu một sản phẩm lỗi, rollback toàn bộ lần import để không có catalog nạp dở. Chỉ commit sau khi mọi dòng và quan hệ tag hợp lệ. Với dữ liệu 162 dòng, một transaction đơn giản là đủ. Sau khi chèn ID nguồn, đồng bộ identity/sequence tới ID lớn nhất để lần thêm sản phẩm mới không đụng khóa chính.
 7. **In báo cáo sau import.** Hiển thị số dòng đọc, số sản phẩm tạo/cập nhật, số tag và thông báo lỗi. Không in `DATABASE_URL` hoặc mật khẩu ra console/log.
-8. **Viết catalog repository** trong `src/phone_advisor/catalog/repository.py`. Hàm truy xuất theo ID, lọc hãng/giá/RAM/ROM/pin và join tag dùng SQLAlchemy query/select. Dùng điều kiện so sánh số và slug tag chính xác; không dùng substring tìm trên chuỗi tag.
+8. **Viết catalog repository** trong `src/phone_advisor/catalog/repository.py`. Hàm truy xuất theo ID, lọc hãng/giá/RAM/ROM/pin và join tag dùng SQLModel `select()`. Dùng điều kiện so sánh số và slug tag chính xác; không dùng substring tìm trên chuỗi tag.
 9. **Giữ phạm vi quyền.** Repository của Agent chỉ cung cấp phương thức đọc catalog. Nếu có thao tác sửa sản phẩm cho đồ án, để ở route/quy trình quản trị riêng, không đưa quyền ghi vào tool của Agent.
 10. **Thử lại lần seed thứ hai và đường chạy web.** Lần thứ hai không có `--upsert` phải dừng an toàn; có cờ cập nhật thì chỉ cập nhật/tạo theo chính sách đã chọn. Sau đó tạm đổi tên CSV và khởi động web: app vẫn phải truy vấn được từ PostgreSQL. Khôi phục tên file sau khi kiểm tra.
 

@@ -15,7 +15,7 @@ Chỉ đánh dấu hoàn thành sau khi đạt tiêu chí trong file hướng d�
 | [ ] | [Buổi 9 — State hội thoại](buoi_09_state_hoi_thoai.md) |  |  |
 | [ ] | [Buổi 10 — Tool schema và whitelist](buoi_10_tool_schema_whitelist.md) |  |  |
 | [ ] | [Buổi 11 — Tích hợp Ollama](buoi_11_tich_hop_ollama.md) |  |  |
-| [ ] | [Buổi 12 — API Flask](buoi_12_api_flask.md) |  |  |
+| [ ] | [Buổi 12 — API FastAPI](buoi_12_api_fastapi.md) |  |  |
 | [ ] | [Buổi 13 — Giao diện chat](buoi_13_giao_dien_chat.md) |  |  |
 | [ ] | [Buổi 14 — Đánh giá và demo](buoi_14_danh_gia_va_demo.md) |  |  |
 

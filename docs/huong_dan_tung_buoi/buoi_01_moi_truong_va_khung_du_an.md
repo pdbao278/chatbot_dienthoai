@@ -6,21 +6,30 @@
 
 ## Mục tiêu
 
-Tạo môi trường Python riêng, dựng cấu trúc module ban đầu và chạy được Flask với một route kiểm tra sức khỏe. Chưa đọc CSV, chưa viết NLP và chưa kết nối Ollama.
+Tạo môi trường Python riêng, dựng cấu trúc module ban đầu và chạy được FastAPI với một route kiểm tra sức khỏe cùng giao diện tài liệu tự động `/docs`. Chưa đọc CSV, chưa viết NLP và chưa kết nối Ollama.
 
 ## Vì sao làm buổi này trước?
 
-Môi trường riêng giúp tránh xung đột thư viện với các dự án khác. Route tối thiểu xác nhận Python/Flask chạy trước khi thêm catalog; nếu có lỗi cấu hình, ta biết nó nằm ở nền tảng chứ chưa bị trộn với logic sản phẩm.
+Môi trường riêng giúp tránh xung đột thư viện với các dự án khác. Route tối thiểu xác nhận Python/FastAPI và Uvicorn chạy trước khi thêm catalog; nếu có lỗi cấu hình, ta biết nó nằm ở nền tảng chứ chưa bị trộn với logic sản phẩm.
 
 ## Các bước
 
 1. **Kiểm tra workspace.** Xác nhận đang ở `E:\NLP`, các file dữ liệu hiện có trong `data/` và chưa chuyển/đổi tên CSV.
 2. **Tạo virtual environment.** Trong PowerShell chạy `py -m venv .venv`, sau đó kích hoạt bằng `.\.venv\Scripts\Activate.ps1`. Nếu lệnh `py` không có, dùng `python -m venv .venv`.
-3. **Tạo `requirements.txt` nền.** Bắt đầu với Flask, SQLAlchemy, Alembic, `psycopg[binary]`, `python-dotenv` và pandas (chỉ để kiểm tra dữ liệu nếu cần). Chạy `python -m pip install -r requirements.txt`. Chưa thêm thư viện Ollama hoặc NLP nâng cao cho đến khi cần ở các buổi sau.
+3. **Tạo `requirements.txt` nền.** Bắt đầu với `fastapi`, `uvicorn[standard]`, `sqlmodel`, `alembic`, `psycopg[binary]`, `python-dotenv` và `pandas` (chỉ để kiểm tra dữ liệu nếu cần). Chạy `python -m pip install -r requirements.txt`. Chưa thêm thư viện Ollama hoặc NLP nâng cao cho đến khi cần ở các buổi sau.
 4. **Tạo cấu trúc thư mục** theo mục 3 của kiến trúc: `src/phone_advisor/db/`, `web/`, `nlp/`, `agent/`, `catalog/`, `scripts/`, `migrations/`, `tests/` và `data/`. Thêm `__init__.py` cho package Python phù hợp.
 5. **Tạo `.gitignore`.** Bỏ qua `.venv/`, `__pycache__/`, `.pytest_cache/`, file `.env` và dữ liệu sinh trong lúc chạy.
-6. **Tạo Flask app tối thiểu** ở `src/phone_advisor/app.py`, thêm route `GET /health` trả JSON `{ "status": "ok" }` và khối `if __name__ == "__main__":` để chạy development server chỉ trên `127.0.0.1`.
-7. **Chạy ứng dụng và kiểm tra route.** Từ root chạy `Set-Location .\src`, rồi `python -m phone_advisor.app`. Trong terminal khác gọi `Invoke-RestMethod http://127.0.0.1:5000/health`; sau đó dừng server bình thường.
+6. **Tạo FastAPI app tối thiểu** ở `src/phone_advisor/app.py`:
+   ```python
+   from fastapi import FastAPI
+
+   app = FastAPI(title="Phone Advisor API", version="1.0.0")
+
+   @app.get("/health")
+   def health_check():
+       return {"status": "ok"}
+   ```
+7. **Chạy ứng dụng và kiểm tra route.** Từ root chạy `Set-Location .\src`, rồi chạy `uvicorn phone_advisor.app:app --reload --host 127.0.0.1 --port 8000`. Trong terminal khác gọi `Invoke-RestMethod http://127.0.0.1:8000/health`; sau đó mở trình duyệt kiểm tra Swagger UI tại `http://127.0.0.1:8000/docs`.
 
 ## Tệp cần tạo hoặc sửa
 
@@ -33,14 +42,14 @@ Môi trường riêng giúp tránh xung đột thư viện với các dự án k
 ## Tự kiểm tra
 
 - `python --version` và `python -m pip list` chạy trong `.venv`.
-- Flask khởi động, `/health` trả đúng JSON; route health chưa tự seed hoặc phụ thuộc vào CSV.
+- FastAPI khởi động qua Uvicorn, `/health` trả đúng JSON và `/docs` hiển thị giao diện Swagger UI tương tác; route health chưa tự seed hoặc phụ thuộc vào CSV.
 - Đóng terminal hoặc thoát environment rồi kích hoạt lại vẫn chạy được.
 - Không có file `.env`, khóa bí mật hay `.venv/` bị đưa vào Git.
 
 ## Hoàn thành khi
 
 - Có thể dựng lại môi trường từ `requirements.txt`.
-- Flask chạy được mà chưa cần đọc dữ liệu hoặc gọi Ollama.
+- FastAPI chạy được mà chưa cần đọc dữ liệu hoặc gọi Ollama.
 - Tên thư mục/package thống nhất với kiến trúc.
 
 **Đầu ra cuối buổi:** khung dự án chạy được và danh sách thư viện ban đầu.

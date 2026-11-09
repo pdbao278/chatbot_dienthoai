@@ -15,7 +15,7 @@ Bộ hướng dẫn này chia kiến trúc trong [`data/kientruc.md`](../../data
 
 | Buổi | Nội dung | Kết quả cần có | Đọc trong kiến trúc |
 |---:|---|---|---|
-| 1 | Môi trường và khung dự án | Flask chạy được; có cấu trúc app và cấu hình cơ bản | Mục 3, 9, 10 |
+| 1 | Môi trường và khung dự án | FastAPI (Uvicorn) chạy được; có cấu trúc app và Swagger UI `/docs` | Mục 3, 9, 10 |
 | 2 | Kiểm tra CSV ban đầu | Data dictionary và danh sách vấn đề dữ liệu | Mục 5.1, `docs/mo_ta_du_lieu.md` |
 | 3 | PostgreSQL, models và migrations | Database local có schema products/tags/product_tags | Mục 3, 5.1, 9 |
 | 4 | Import CSV và repository PostgreSQL | CSV được seed có kiểm soát; catalog truy vấn DB, không đọc CSV runtime | Mục 5.1 |
@@ -26,7 +26,7 @@ Bộ hướng dẫn này chia kiến trúc trong [`data/kientruc.md`](../../data
 | 9 | State hội thoại theo phiên | Câu tiếp nối giữ đúng điều kiện, không lẫn phiên | Mục 4.2 E½ |
 | 10 | Tool schema và whitelist | Tool chỉ nhận request hợp lệ, chỉ đọc catalog DB | Mục 6.1–6.5 |
 | 11 | Tích hợp Agent/Ollama | Agent gọi đúng tool, có timeout/fallback | Mục 6.6, 9 |
-| 12 | API Flask cho chat | API trả kết quả, hỏi làm rõ và lỗi theo hợp đồng | Mục 2, 8 |
+| 12 | API FastAPI cho chat | API trả kết quả, Swagger docs, hỗ trợ streaming | Mục 2, 8 |
 | 13 | Giao diện chat | Người dùng hỏi, xem sản phẩm và tiếp tục hội thoại | Mục 8 |
 | 14 | Đánh giá và demo | Có kết quả đánh giá và kịch bản chạy lại được | Mục 10, 11, 12 |
 
@@ -42,7 +42,7 @@ Bộ hướng dẫn này chia kiến trúc trong [`data/kientruc.md`](../../data
 ## Nguyên tắc dữ liệu xuyên suốt
 
 - PostgreSQL là nguồn dữ liệu chuẩn khi web chạy; CSV chỉ dùng cho import/seed có chủ đích.
-- Không tự seed hoặc ghi đè database khi Flask khởi động.
+- Không tự seed hoặc ghi đè database khi FastAPI khởi động.
 - Agent chỉ có quyền đọc catalog; thao tác ghi nếu bổ sung sau này phải nằm ở luồng quản trị riêng.
 - Không lấy giá hoặc thông số từ trí nhớ LLM; giá trong DB vẫn là snapshot, không phải giá thị trường trực tiếp.
 - Điều kiện bắt buộc dùng để lọc; sở thích chỉ dùng để xếp hạng.

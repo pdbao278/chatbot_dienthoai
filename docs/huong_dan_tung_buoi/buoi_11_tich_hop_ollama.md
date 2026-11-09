@@ -20,7 +20,7 @@ Catalog, parser và schema đã có thể kiểm tra riêng. Khi thêm LLM lúc 
 4. **Chỉ cung cấp tool được backend bật** cho intent hiện tại. Tool arguments phải khớp request chuẩn; registry ở Buổi 10 mới là nơi thực thi.
 5. **Dùng system prompt** ở mục 6.6: chỉ dữ liệu từ tool, không tự đổi điều kiện, không bịa, không tạo HTML/JavaScript.
 6. **Giới hạn vòng gọi tool tối đa 2 lần** trong một lượt. Nếu model lặp, gọi tool sai hoặc JSON sai thì dừng, không thử vô hạn.
-7. **Đặt timeout hữu hạn** cho Ollama và bắt các lỗi kết nối/model chưa sẵn sàng. Không để request Flask treo vô hạn.
+7. **Đặt timeout hữu hạn** cho Ollama và bắt các lỗi kết nối/model chưa sẵn sàng. Không để request FastAPI treo vô hạn.
 8. **Viết fallback có mẫu cố định:** khi catalog đã có kết quả nhưng Ollama lỗi, backend dựng câu trả lời ngắn từ ProductCard; nếu catalog cũng lỗi, trả lỗi dịch vụ có kiểm soát.
 9. **Kiểm tra chống prompt injection** bằng câu yêu cầu bỏ quy tắc hoặc nội dung CSV có câu giống chỉ dẫn; kết quả vẫn phải theo whitelist và request chuẩn.
 

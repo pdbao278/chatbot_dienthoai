@@ -14,7 +14,7 @@ Ranking không được phép sửa kết quả lọc. Khi kiểm tra riêng sea
 
 ## Các bước
 
-1. **Định nghĩa hàm truy vấn** trong `catalog/search.py`: nhận một repository/session cùng `filters`, tạo SQLAlchemy query/select để database lọc tập ứng viên.
+1. **Định nghĩa hàm truy vấn** trong `catalog/search.py`: nhận một repository/session cùng `filters`, tạo câu truy vấn SQLModel `select()` để database lọc tập ứng viên.
 2. **Áp dụng mọi điều kiện cứng bằng AND:** hãng nếu có, min/max giá, RAM/ROM/pin/tần số tối thiểu, `required_tags`, từng nhóm `required_tag_groups`, hãng/tag/ID bị loại trừ.
 3. **Dùng toán tử giá chính xác:** `dưới 15 triệu` là `<`; `tối đa 15 triệu` là `<=`; `trên 10 triệu` là `>`; `ít nhất 10 triệu` là `>=`. Nếu hai đầu bằng nhau, chỉ còn kết quả khi cả hai đầu bao gồm ngưỡng.
 4. **So tag theo tập đã tách.** `required_tags` là AND; trong một `required_tag_group` là OR; sản phẩm có bất kỳ tag bị loại nào thì loại.

@@ -1,6 +1,6 @@
 # KIẾN TRÚC VÀ HƯỚNG DẪN THỰC HIỆN CHATBOT TƯ VẤN ĐIỆN THOẠI
 
-> **Phạm vi:** website mô phỏng tư vấn điện thoại bằng Flask, PostgreSQL, NLP tiếng Việt và AI Agent chạy qua Ollama. CSV chỉ là dữ liệu đầu vào để nạp ban đầu.
+> **Phạm vi:** website mô phỏng tư vấn điện thoại bằng FastAPI, PostgreSQL, NLP tiếng Việt và AI Agent chạy qua Ollama. CSV chỉ là dữ liệu đầu vào để nạp ban đầu.
 >
 > **Không nằm trong phiên bản này:** chính sách bảo hành, kiểm tra tồn kho, cập nhật giá trực tuyến, đặt hàng/thanh toán và tư vấn dựa trên tài liệu dài.
 
@@ -8,10 +8,10 @@
 
 ## 1. Tóm tắt quyết định kiến trúc
 
-Đề xuất làm một **ứng dụng Flask dạng modular monolith**: một ứng dụng chạy trên máy, bên trong chia thành các module có trách nhiệm riêng.
+Đề xuất làm một **ứng dụng FastAPI dạng modular monolith** (chạy trên máy chủ ASGI Uvicorn): một ứng dụng chạy trên máy, bên trong chia thành các module có trách nhiệm riêng.
 
 - Dùng **PostgreSQL làm nguồn dữ liệu chuẩn khi ứng dụng chạy**. Nạp `dien_thoai_chuan_hoa.csv` vào database bằng một lệnh riêng ở bước khởi tạo; sau đó website đọc database, không đọc CSV mỗi lần khởi động hay mỗi yêu cầu. Chức năng tư vấn chỉ đọc catalog; trang quản trị ghi dữ liệu là phần mở rộng. `dien_thoai_chuan_hoa.json` chỉ là bản tham chiếu/xuất, không tham gia runtime.
-- Dùng SQLAlchemy 2.x để ánh xạ model và truy vấn, Alembic để quản lý thay đổi schema bằng migration. Mỗi request dùng một database session riêng rồi đóng session sau khi xử lý.
+- Dùng SQLModel (kết hợp Pydantic và SQLAlchemy) để ánh xạ model và truy vấn, Alembic để quản lý thay đổi schema bằng migration. Mỗi request dùng một database session riêng rồi đóng session sau khi xử lý.
 - Dùng **NLP** để chuẩn hóa tiếng Việt, nhận diện ý định, trích xuất điều kiện bắt buộc và sở thích.
 - Dùng **AI Agent qua Ollama** để gọi tool được backend cho phép và diễn đạt kết quả. Backend xác định tool theo intent; Agent không được tự sửa hoặc nới điều kiện đã xác nhận.
 - Chỉ cho Agent gọi các công cụ đọc dữ liệu có schema và giới hạn rõ ràng; kiểm tra mọi lời gọi ở backend trước khi truy vấn.
@@ -29,15 +29,15 @@ Danh mục hiện có 162 dòng và 17 cột như hãng, giá, RAM, ROM, pin, m�
 ~~~mermaid
 flowchart TD
     User[Người dùng] <--> UI[Giao diện chat]
-    UI <--> Flask[Flask Web/API]
-    Flask --> State[Ngữ cảnh hội thoại]
-    Flask --> NLP[NLP tiếng Việt]
+    UI <--> FastAPI[FastAPI Web/API]
+    FastAPI --> State[Ngữ cảnh hội thoại]
+    FastAPI --> NLP[NLP tiếng Việt]
     NLP --> Parsed[Yêu cầu đã chuẩn hóa]
     Parsed --> Validate[Backend xác thực điều kiện]
     Validate -->|hợp lệ| Agent[Agent điều phối Ollama]
     Validate -->|mơ hồ hoặc mâu thuẫn| Clarify[Hỏi lại người dùng]
     Clarify --> UI
-    Flask --> Static[Trả lời mẫu greeting/out-of-scope]
+    FastAPI --> Static[Trả lời mẫu greeting/out-of-scope]
     Static --> UI
     Agent --> Guard[Danh sách công cụ + kiểm tra tham số]
     Guard --> Tools[Công cụ tư vấn sản phẩm]
@@ -56,7 +56,7 @@ flowchart TD
 | Thành phần | Làm gì | Vì sao tách riêng |
 |---|---|---|
 | Giao diện chat | Gửi câu hỏi, hiển thị tin nhắn và thẻ điện thoại | Không để giao diện tự lọc hay tự suy diễn thông số |
-| Flask | Nhận yêu cầu, gọi các module và trả kết quả | Là đầu mối giao tiếp giữa giao diện với xử lý phía máy chủ |
+| FastAPI | Nhận yêu cầu, xác thực Pydantic schema, gọi các module và trả kết quả (hỗ trợ streaming) | Là đầu mối giao tiếp bất đồng bộ (ASGI) giữa giao diện với xử lý phía máy chủ |
 | NLP | Chuẩn hóa cách viết, nhận diện ý định và trích xuất điều kiện | Có thể kiểm tra riêng và trình bày rõ phần xử lý ngôn ngữ trong đồ án |
 | Backend/policy | Xác thực trường, phát hiện mâu thuẫn và quyết định khi nào phải hỏi lại | Giữ điều kiện nhất quán trước khi gọi model hoặc catalog |
 | Agent | Gọi tool đã được backend cho phép và diễn đạt kết quả | LLM xử lý hội thoại nhưng không làm nguồn dữ liệu hoặc thay đổi điều kiện đã xác thực |
@@ -132,7 +132,7 @@ E:\NLP/
 
 ### Vai trò các module chính
 
-- **web/**: route Flask, trang chat và thành phần hiển thị thẻ sản phẩm.
+- **web/**: router FastAPI, trang chat và thành phần hiển thị thẻ sản phẩm (tự động sinh Swagger docs tại `/docs`).
 - **nlp/**: chuẩn hóa câu chữ, từ điển đồng nghĩa, nhận diện ý định, trích xuất điều kiện và giữ một số thông tin hội thoại cần thiết.
 - **agent/**: lời nhắc hệ thống, điều phối Ollama, schema tham số và danh sách hàm Agent được phép gọi.
 - **db/**: khai báo model PostgreSQL, tạo engine/session factory; không chia sẻ một Session giữa nhiều request.
@@ -142,7 +142,7 @@ E:\NLP/
 - **data/**: CSV dùng để seed ban đầu/nhập một phiên bản dữ liệu mới theo quy trình; sau khi seed, PostgreSQL mới là nguồn chuẩn cho website. JSON không dùng runtime. Tài liệu này hiện ở `data/kientruc.md` theo vị trí của workspace.
 - **docs/**: data dictionary và hướng dẫn thực hiện theo từng buổi trong [`docs/huong_dan_tung_buoi/README.md`](../docs/huong_dan_tung_buoi/README.md).
 
-Không cần tách thành nhiều dịch vụ/microservice. Một ứng dụng Flask kết nối một PostgreSQL local là đủ để mô phỏng website thật mà vẫn giữ cấu hình vừa sức cho đồ án.
+Không cần tách thành nhiều dịch vụ/microservice. Một ứng dụng FastAPI kết nối một PostgreSQL local chạy qua Uvicorn là đủ để mô phỏng website thật, hỗ trợ xử lý bất đồng bộ mượt mà mà vẫn giữ cấu hình vừa sức cho đồ án.
 
 ---
 
@@ -388,7 +388,7 @@ Có thể dùng Underthesea để thử tách từ hoặc hỗ trợ phân tích
 
 ### 5.1. PostgreSQL, schema và vòng đời dữ liệu
 
-PostgreSQL là nguồn chuẩn duy nhất khi web chạy. CSV chỉ được đọc bởi lệnh seed riêng để nhập dữ liệu ban đầu hoặc một đợt cập nhật được chủ động yêu cầu; Flask không tự seed, không đọc CSV mỗi request và không dùng JSON để bù trường.
+PostgreSQL là nguồn chuẩn duy nhất khi web chạy. CSV chỉ được đọc bởi lệnh seed riêng để nhập dữ liệu ban đầu hoặc một đợt cập nhật được chủ động yêu cầu; FastAPI không tự seed, không đọc CSV mỗi request và không dùng JSON để bù trường.
 
 #### Schema tối thiểu
 
@@ -401,9 +401,9 @@ PostgreSQL là nguồn chuẩn duy nhất khi web chạy. CSV chỉ được đ�
 
 #### Quy trình thiết lập và dùng
 
-1. Cài PostgreSQL và tạo database cùng hai role riêng: `phone_admin` để chạy migration/seed và `phone_app` để chạy Flask. Không dùng tài khoản superuser khi chạy Flask; trong phiên bản chỉ tư vấn, `phone_app` chỉ cần quyền SELECT.
+1. Cài PostgreSQL và tạo database cùng hai role riêng: `phone_admin` để chạy migration/seed và `phone_app` để chạy FastAPI. Không dùng tài khoản superuser khi chạy ứng dụng; trong phiên bản chỉ tư vấn, `phone_app` chỉ cần quyền SELECT.
 2. Lưu `DATABASE_URL` và `DATABASE_ADMIN_URL` trong `.env` local; chỉ commit `.env.example` với giá trị giả. App đọc `DATABASE_URL`; Alembic/seed dùng credential admin. Ví dụ: `postgresql+psycopg://phone_app:...@localhost:5432/phone_advisor`.
-3. Khai báo SQLAlchemy models trong `src/phone_advisor/db/models.py`; tạo migration Alembic cho ba bảng và các ràng buộc bằng role admin. Review migration được autogenerate trước khi áp dụng.
+3. Khai báo SQLModel models trong `src/phone_advisor/db/models.py`; tạo migration Alembic cho ba bảng và các ràng buộc bằng role admin. Review migration được autogenerate trước khi áp dụng.
 4. Tạo engine và `sessionmaker` một lần lúc khởi tạo app. Mỗi request mở một Session, commit khi có thao tác ghi, rollback khi lỗi và luôn đóng Session. Không giữ Session dùng chung toàn cục giữa requests.
 5. Chạy migration bằng lệnh tường minh, sau đó chạy lệnh seed (ví dụ `python -m scripts.seed_catalog`) để kiểm tra CSV rồi nhập dữ liệu. Seed mặc định chỉ chạy khi bảng sản phẩm chưa có dữ liệu; nhập lại cần cờ `--upsert` được định nghĩa rõ.
 6. Seed ánh xạ ID, kiểu số, null và tag; kiểm tra khóa trùng/giá trị sai trước khi commit transaction. Nếu lỗi giữa chừng thì rollback toàn bộ batch, tránh catalog nạp dở. Nếu cột ID dùng identity/sequence để hỗ trợ thêm sản phẩm sau này, đồng bộ sequence tới ID lớn nhất sau khi nạp ID nguồn.
@@ -679,7 +679,7 @@ Mỗi gợi ý nên có một câu giải thích gắn với nhu cầu cụ th�
 
 ### Hợp đồng API chat
 
-Giao diện gửi `POST /api/chat` với JSON `{ "message": "..." }`; backend kiểm tra body JSON, từ chối tin nhắn rỗng hoặc vượt giới hạn cấu hình và nhận diện phiên bằng cookie session. Cookie đặt `HttpOnly` và `SameSite`; bật `Secure` khi chạy qua HTTPS. Chỉ cho phép origin cần thiết, không bật CORS wildcard; nếu chỉ dùng local thì bind server vào loopback (`127.0.0.1`). Phản hồi thành công có dạng:
+Giao diện gửi `POST /api/chat` với JSON `{ "message": "..." }`; FastAPI sử dụng Pydantic model (`BaseModel`) để tự động xác thực body JSON, từ chối tin nhắn rỗng hoặc vượt giới hạn cấu hình (trả mã 422 tự động) và nhận diện phiên bằng cookie session. Cookie đặt `HttpOnly` và `SameSite`; bật `Secure` khi chạy qua HTTPS. Có thể hỗ trợ streaming phản hồi theo thời gian thực (SSE) qua `StreamingResponse`. Endpoint tự động hiển thị trong tài liệu OpenAPI/Swagger UI tại `/docs`. Chỉ cho phép origin cần thiết, không bật CORS wildcard; nếu chỉ dùng local thì bind server vào loopback (`127.0.0.1:8000`). Phản hồi thành công có dạng:
 
 ~~~json
 {
@@ -692,7 +692,7 @@ Giao diện gửi `POST /api/chat` với JSON `{ "message": "..." }`; backend ki
 
 Khi cần hỏi lại, trả `status: "needs_clarification"`, câu hỏi trong `clarification` và không gọi catalog với điều kiện chưa xác nhận. Dùng HTTP 200 cho câu trả lời/clarification, 422 cho đầu vào không hợp lệ và 503 cho dịch vụ không sẵn sàng. Lỗi dùng một dạng thống nhất `{ "error": { "code": "...", "message": "..." } }`; không đưa traceback hoặc nội dung nội bộ ra giao diện. Với cookie session, bảo vệ POST bằng token CSRF hoặc cơ chế tương đương cùng kiểm tra origin.
 
-Giao diện phải escape nội dung văn bản, không render HTML do LLM tạo. Chỉ hiển thị ảnh/liên kết có URL `https` hợp lệ thuộc domain allowlist cấu hình; liên kết ngoài mở tab mới phải dùng `rel="noopener noreferrer"`. Flask bật các security headers phù hợp như CSP, `X-Content-Type-Options` và chống nhúng trang ngoài ý muốn. Không ghi toàn bộ hội thoại hoặc cookie/session ID vào log.
+Giao diện phải escape nội dung văn bản, không render HTML do LLM tạo. Chỉ hiển thị ảnh/liên kết có URL `https` hợp lệ thuộc domain allowlist cấu hình; liên kết ngoài mở tab mới phải dùng `rel="noopener noreferrer"`. FastAPI cấu hình các middleware security headers phù hợp như CSP, `X-Content-Type-Options` và chống nhúng trang ngoài ý muốn. Không ghi toàn bộ hội thoại hoặc cookie/session ID vào log.
 
 ---
 
@@ -701,14 +701,14 @@ Giao diện phải escape nội dung văn bản, không render HTML do LLM tạo
 Tài liệu ban đầu nêu máy có Intel Core Ultra 7, RTX 3050 Ti Laptop 4GB VRAM, 16GB RAM, Ollama và các model Qwen cài sẵn. Đây là bối cảnh triển khai local; không nên xem các con số tốc độ hoặc mức VRAM ước tính là cam kết.
 
 - Đọc `DATABASE_URL`, tên model và cấu hình máy chủ từ biến môi trường/cấu hình ứng dụng; không ghi mật khẩu database vào mã hoặc Git.
-- Chạy migration Alembic tường minh trước khi khởi động phiên bản mới; không tự tạo/sửa schema trong lúc Flask start bằng `create_all`.
+- Chạy migration Alembic tường minh trước khi khởi động phiên bản mới; không tự tạo/sửa schema trong lúc FastAPI khởi động bằng `create_all`.
 - Dùng quyền database tối thiểu: web tư vấn chỉ cần đọc catalog; migration/import dùng credential bảo trì riêng. Đóng Session sau request và xử lý lỗi database có timeout/thông báo phù hợp.
 - Đọc `SECRET_KEY`, thời hạn session và timeout gọi Ollama từ cấu hình môi trường; không ghi khóa bí mật vào mã nguồn.
 - Khi dùng cookie session, bật `HttpOnly`, `SameSite` và `Secure` trên HTTPS; bảo vệ `POST /api/chat` khỏi CSRF và chỉ cho phép CORS từ origin được cấu hình.
 - Đo thời gian khởi động, thời gian phản hồi, mức RAM/VRAM và tốc độ sinh token trên chính máy chạy đồ án.
 - Kết quả phụ thuộc phiên bản model, lượng ngữ cảnh, quantization, tiến trình khác đang chạy và mức GPU offload của Ollama.
 - Nếu model 3B thiếu bộ nhớ hoặc phản hồi chậm, thử cấu hình/model nhẹ hơn đã cài; ghi lại phép đo thay vì cam kết một con số chung.
-- Nếu Ollama tắt, model chưa sẵn sàng hoặc hết timeout, Flask cần báo bot tạm thời không kết nối được, không làm ứng dụng treo vô hạn. Catalog vẫn phải hoạt động độc lập; backend có thể dùng mẫu trả lời cố định để trình bày các kết quả catalog khi phần diễn đạt bằng LLM lỗi.
+- Nếu Ollama tắt, model chưa sẵn sàng hoặc hết timeout, FastAPI cần báo bot tạm thời không kết nối được, không làm ứng dụng treo vô hạn. Catalog vẫn phải hoạt động độc lập; backend có thể dùng mẫu trả lời cố định để trình bày các kết quả catalog khi phần diễn đạt bằng LLM lỗi.
 
 Không khẳng định chatbot luôn trả lời dưới một giây, toàn bộ model luôn nằm trong VRAM, hay dùng CPU dưới một tỷ lệ cố định trước khi đo thực tế.
 
@@ -718,14 +718,14 @@ Không khẳng định chatbot luôn trả lời dưới một giây, toàn bộ
 
 | Buổi | Cách làm | Vì sao | Kết quả cần có |
 |---:|---|---|---|
-| 1 | Chốt phạm vi, tạo môi trường Python và Flask app tối thiểu | Xác nhận nền chạy trước khi thêm nhiều lớp | App chạy local và cấu hình cơ bản |
+| 1 | Chốt phạm vi, tạo môi trường Python và FastAPI app tối thiểu | Xác nhận nền chạy trước khi thêm nhiều lớp | App chạy local (Uvicorn) và cấu hình cơ bản |
 | 2 | Kiểm tra header, kiểu dữ liệu, tag, ID và URL trong CSV | Phát hiện lỗi đầu vào trước khi ghi vào database | Data dictionary và danh sách vấn đề |
-| 3 | Tạo PostgreSQL, SQLAlchemy models và migration Alembic | Schema/ràng buộc phải có trước khi import | Ba bảng products/tags/product_tags được tạo bằng migration |
-| 4 | Seed CSV bằng lệnh riêng, rồi tạo repository truy vấn DB | Tách import khỏi runtime và bảo đảm dữ liệu bền vững | Catalog đọc DB; Flask không đọc CSV |
+| 3 | Tạo PostgreSQL, SQLModel models và migration Alembic | Schema/ràng buộc phải có trước khi import | Ba bảng products/tags/product_tags được tạo bằng migration |
+| 4 | Seed CSV bằng lệnh riêng, rồi tạo repository truy vấn DB | Tách import khỏi runtime và bảo đảm dữ liệu bền vững | Catalog đọc DB; ứng dụng không đọc CSV |
 | 5–6 | Làm search/browse, recommend/detail/compare | Xác nhận nghiệp vụ sản phẩm độc lập với NLP/LLM | Bộ catalog có thứ tự ổn định và đúng điều kiện |
 | 7–9 | Làm chuẩn hóa, intent/slots và state hội thoại | Câu tiếng Việt cần thành request có cấu trúc, giữ đúng ngữ cảnh | Request đã xác thực và câu hỏi làm rõ khi cần |
 | 10–11 | Tạo whitelist tool, sau đó tích hợp Agent/Ollama | Chỉ cho model gọi nghiệp vụ được phép | Tool an toàn; có timeout/fallback |
-| 12–13 | Tạo API Flask và giao diện chat | Hoàn chỉnh luồng trình duyệt → API → catalog/database | Người dùng hỏi, xem và tiếp tục hội thoại |
+| 12–13 | Tạo API FastAPI và giao diện chat | Hoàn chỉnh luồng trình duyệt → API → catalog/database (hỗ trợ streaming) | Người dùng hỏi, xem và tiếp tục hội thoại |
 | 14 | Đánh giá dữ liệu, API, UI và chuẩn bị kịch bản demo | Tìm lỗi theo từng lớp và giúp demo lặp lại được | Báo cáo đánh giá cùng hướng dẫn chạy |
 
 ### Thứ tự làm khuyến nghị
@@ -770,10 +770,11 @@ Mọi trường hợp kiểm tra điều kiện cứng phải đạt 100% tuân 
 
 ## 13. Kết luận
 
-Kiến trúc phù hợp nhất với phạm vi hiện tại là **Flask + PostgreSQL + SQLAlchemy/Alembic + NLP tiếng Việt dạng kết hợp + Ollama Agent gọi công cụ**. CSV chỉ seed dữ liệu ban đầu; PostgreSQL là nguồn chuẩn khi web chạy. NLP hiểu câu hỏi, Agent điều phối và diễn đạt, còn catalog truy vấn và xếp hạng dữ liệu xác định. Cách phân chia này mô phỏng web thật mà vẫn dễ làm theo từng bước và tránh để LLM tự bịa thông tin sản phẩm.
+Kiến trúc phù hợp nhất với phạm vi hiện tại là **FastAPI + Uvicorn + SQLModel (Pydantic + SQLAlchemy) + PostgreSQL + Alembic + NLP tiếng Việt dạng kết hợp + Ollama Agent gọi công cụ** (hỗ trợ streaming response). CSV chỉ seed dữ liệu ban đầu; PostgreSQL là nguồn chuẩn khi web chạy. NLP hiểu câu hỏi, Agent điều phối và diễn đạt, còn catalog truy vấn và xếp hạng dữ liệu xác định. Cách phân chia này mô phỏng web thật mà vẫn dễ làm theo từng bước và tránh để LLM tự bịa thông tin sản phẩm.
 
 ### Tài liệu kỹ thuật tham khảo
 
+- [SQLModel: hướng dẫn chính thức](https://sqlmodel.tiangolo.com/)
 - [PostgreSQL: constraints và bảng](https://www.postgresql.org/docs/current/ddl-constraints.html)
 - [SQLAlchemy 2.0: quản lý Session](https://docs.sqlalchemy.org/en/20/orm/session_basics.html)
 - [SQLAlchemy 2.0: PostgreSQL và psycopg](https://docs.sqlalchemy.org/en/20/dialects/postgresql.html)

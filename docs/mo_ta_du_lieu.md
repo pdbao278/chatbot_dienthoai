@@ -46,7 +46,7 @@ Tag được xem là nhãn dữ liệu, không phải benchmark hay khẳng đ�
 ## Quy tắc seed và cập nhật dữ liệu
 
 1. Trước khi import, kiểm tra header, ID duy nhất, ô trống, kiểu số, tag và URL; lỗi phải nêu số dòng/cột.
-2. Chạy migration Alembic trước khi seed; seed là lệnh riêng, tuyệt đối không tự chạy ở lúc Flask khởi động hoặc khi có request.
+2. Chạy migration Alembic trước khi seed; seed là lệnh riêng, tuyệt đối không tự chạy ở lúc FastAPI khởi động hoặc khi có request.
 3. Mặc định chỉ seed database đang rỗng. Cập nhật record trùng ID chỉ khi dùng chế độ upsert có chủ đích; không xóa record vắng khỏi CSV mới nếu chưa quyết định chính sách xóa.
 4. Không đổi đơn vị hoặc ý nghĩa cột mà không sửa model/migration và tài liệu.
 5. Nếu cần JSON tham chiếu, sinh lại theo quy trình có ghi nhận; không sửa riêng một bản rồi quên bản còn lại.
