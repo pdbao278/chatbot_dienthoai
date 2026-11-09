@@ -14,9 +14,9 @@ Một request chuẩn là giao kèo giữa NLP, backend, catalog và Agent. Nế
 
 ## Các bước
 
-1. **Tạo `nlp/intent.py`.** Nhận diện `recommend`, `search`, `detail`, `compare`, `browse`, `greeting`, `out_of_scope` theo luật rõ ràng.
+1. **Tạo `nlp/intent.py`.** Sử dụng mô hình Few-Shot **`SetFit`** (huấn luyện từ tập dữ liệu gán nhãn `evaluation/intent_slots.csv`) để nhận diện 7 intent: `recommend`, `search`, `detail`, `compare`, `browse`, `greeting`, `out_of_scope`. Giúp phân loại chính xác dựa trên ngữ nghĩa mà không cần fix cứng từ khóa `if/else`.
 2. **Không để các intent chồng lấn:** “máy nào dưới 5 triệu?” là search; “gợi ý máy dưới 5 triệu” là recommend; “liệt kê tất cả Samsung” là browse; câu hỏi model cụ thể là detail.
-3. **Tạo `nlp/slots.py`.** Trích xuất hãng, model, min/max giá cùng inclusivity, thông số tối thiểu, tag cần có, tag loại trừ và ID loại trừ.
+3. **Tạo `nlp/slots.py`.** Sử dụng `rapidfuzz` kết hợp từ điển `aliases.py` và regex parser để trích xuất hãng, model, min/max giá cùng inclusivity, thông số tối thiểu, tag cần có, tag loại trừ và ID loại trừ. Chịu được lỗi gõ sai chính tả và viết tắt.
 4. **Phân biệt bắt buộc/mềm:** mặc định tag là preference; cách nói “phải có/chỉ lấy” dùng `required_tags` hoặc `required_tag_groups`; “ưu tiên” dùng `preferences`.
 5. **Tạo hàm validate request.** Kiểm tra intent hợp lệ, hãng/tag tồn tại, số không âm, min≤max và giới hạn 1–3 kết quả. Nếu hãng/model mâu thuẫn hoặc tên model khớp nhiều dòng thì trả trạng thái `needs_clarification`.
 6. **Định nghĩa ánh xạ intent-tool:** recommend/search → `recommend_phones`; detail → `get_phone_detail`; compare → `compare_phones`; browse → `browse_phones`; greeting/out-of-scope không gọi tool.

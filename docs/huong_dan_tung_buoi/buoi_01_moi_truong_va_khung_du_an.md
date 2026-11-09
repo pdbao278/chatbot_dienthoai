@@ -16,7 +16,7 @@ Môi trường riêng giúp tránh xung đột thư viện với các dự án k
 
 1. **Kiểm tra workspace.** Xác nhận đang ở `E:\NLP`, các file dữ liệu hiện có trong `data/` và chưa chuyển/đổi tên CSV.
 2. **Tạo virtual environment.** Trong PowerShell chạy `py -m venv .venv`, sau đó kích hoạt bằng `.\.venv\Scripts\Activate.ps1`. Nếu lệnh `py` không có, dùng `python -m venv .venv`.
-3. **Tạo `requirements.txt` nền.** Bắt đầu với `fastapi`, `uvicorn[standard]`, `sqlmodel`, `alembic`, `psycopg[binary]`, `python-dotenv` và `pandas` (chỉ để kiểm tra dữ liệu nếu cần). Chạy `python -m pip install -r requirements.txt`. Chưa thêm thư viện Ollama hoặc NLP nâng cao cho đến khi cần ở các buổi sau.
+3. **Tạo `requirements.txt` nền.** Bắt đầu với `fastapi`, `uvicorn[standard]`, `sqlmodel`, `alembic`, `psycopg[binary]`, `python-dotenv`, `pandas`, cùng các thư viện NLP lõi: `setfit`, `rapidfuzz` và `httpx`. Chạy `python -m pip install -r requirements.txt`.
 4. **Tạo cấu trúc thư mục** theo mục 3 của kiến trúc: `src/phone_advisor/db/`, `web/`, `nlp/`, `agent/`, `catalog/`, `scripts/`, `migrations/`, `tests/` và `data/`. Thêm `__init__.py` cho package Python phù hợp.
 5. **Tạo `.gitignore`.** Bỏ qua `.venv/`, `__pycache__/`, `.pytest_cache/`, file `.env` và dữ liệu sinh trong lúc chạy.
 6. **Tạo FastAPI app tối thiểu** ở `src/phone_advisor/app.py`:

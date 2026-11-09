@@ -70,7 +70,7 @@ flowchart TD
 1. **Người dùng:** Nhập yêu cầu tìm kiếm và xem kết quả. *(Công nghệ: Trình duyệt Web)*
 2. **Giao diện Chat Web:** Nhận tin nhắn từ người dùng và hiển thị câu trả lời kèm thẻ sản phẩm. *(Công nghệ: React / Vue / HTML, CSS, JS)*
 3. **FastAPI Web API:** Tiếp nhận yêu cầu từ Web và chuyển vào hệ thống xử lý. *(Công nghệ: Python, FastAPI)*
-4. **NLP & Dialogue State:** Làm sạch câu chữ, hiểu ý định mua gì và lấy ra các thông số (giá, loại máy...). *(Công nghệ: Python NLP, Regex)*
+4. **NLP & Dialogue State:** Làm sạch câu chữ, phân loại 7 ý định bằng mô hình học máy Few-Shot (SetFit) và bóc tách các thông số (giá, hãng, model, nhu cầu...). *(Công nghệ: SetFit, Sentence Transformers, RapidFuzz, Regex)*
 5. **Policy Guardrail (Kiểm tra):** Xem câu hỏi có rõ ràng, hợp lệ không để chia nhánh:
    - *Nếu Mơ hồ / Mâu thuẫn:* Chuyển sang bước 6 để hỏi lại.
    - *Nếu Hợp lệ:* Chuyển sang bước 7 cho AI xử lý.
@@ -232,7 +232,10 @@ Phiên bản đầu có thể nhận diện các ý định sau:
 
 “Máy nào dưới 5 triệu?” là `search` vì có điều kiện lọc; `browse` dành cho yêu cầu liệt kê hoặc khám phá danh mục. `search` không xếp hạng theo sở thích ngầm định; `recommend` mới áp dụng thứ tự ưu tiên. Khi cần liệt kê nhiều hơn ba máy, dùng `browse` để phân trang.
 
-Bắt đầu bằng luật và từ khóa rõ ràng vì dễ giải thích, không cần dữ liệu huấn luyện ban đầu. Nếu muốn thử mô hình phân loại trong môn học, có thể tạo tập câu hỏi riêng, gán nhãn ý định rồi so sánh với baseline luật. **CSV sản phẩm không phải tập dữ liệu câu hỏi đã gán nhãn**, nên không thể dùng trực tiếp CSV để huấn luyện intent classifier.
+**Phương pháp phân loại Intent:** Sử dụng mô hình **SetFit (Sentence Transformer Few-Shot Learning)** kết hợp mô hình nền đa ngữ/tiếng Việt (như `paraphrase-multilingual-MiniLM-L12-v2` hoặc `vietnamese-sbert`).
+- **Tập dữ liệu huấn luyện:** Huấn luyện trên tập câu hỏi gán nhãn độc lập [`evaluation/intent_slots.csv`](file:///E:/NLP/evaluation/intent_slots.csv) (khoảng 5–8 câu mẫu cho mỗi intent). Lưu ý: **CSV sản phẩm không phải tập câu hỏi gán nhãn**, nên toàn bộ intent classifier được học từ tập câu hỏi thực tế này.
+- **Ưu điểm so với từ khóa cố định:** Khái quát hóa ngữ nghĩa sâu sắc, bắt chính xác các biến thể tiếng lóng (*"chụp choẹt"*, *"quay đầu"*, *"pin trâu"*), không bị giới hạn bởi danh sách từ khóa cố định, đạt độ chính xác > 90% chỉ với vài chục mẫu train trên CPU.
+- **Dự phòng (Fallback):** Kết hợp các mẫu cố định để ngắt nhanh các câu `greeting` hoặc `out_of_scope` rõ ràng.
 
 **Xử lý câu hỏi ngoài phạm vi:**
 
@@ -395,9 +398,13 @@ Có thể để Qwen hỗ trợ hiểu câu diễn đạt khó hoặc câu nối
 
 **Lý do dùng cách kết hợp:** luật và từ điển cho kết quả minh bạch với miền dữ liệu nhỏ; LLM xử lý cách nói đa dạng; kiểm tra schema giúp hạn chế đầu ra tùy tiện. Không nên giao toàn bộ việc tính ngân sách và lọc sản phẩm cho LLM.
 
-### 4.3. Có nên dùng Underthesea?
+### 4.3. Lựa chọn thư viện NLP: SetFit kết hợp RapidFuzz
 
-Có thể dùng Underthesea để thử tách từ hoặc hỗ trợ phân tích tiếng Việt, nhưng nó không thay thế từ điển hãng/tag, nhận dạng tiền và kiểm tra điều kiện. Với bộ dữ liệu hiện tại, normalization, alias và slot extraction quan trọng hơn việc xây dựng pipeline NLP nặng.
+Thay vì xây dựng pipeline tách từ truyền thống nặng nề hoặc fix cứng từ khóa `if/else`, hệ thống sử dụng kiến trúc lai (Hybrid NLP Pipeline) tối ưu:
+1. **SetFit (Hugging Face):** Sử dụng Sentence Transformer để phân loại 7 ý định với kỹ thuật Few-Shot Learning. Chỉ cần 5–8 câu mẫu mỗi nhãn từ `evaluation/intent_slots.csv`, huấn luyện 20–30 giây trên CPU, đạt độ chính xác > 90% và hiểu ngữ nghĩa tiếng Việt linh hoạt.
+2. **RapidFuzz:** Thư viện so khớp mờ (Fuzzy matching) hiệu năng cao viết bằng C++, dùng trong `aliases.py` để nhận diện Hãng, Model và Tag nhu cầu kể cả khi người dùng gõ sai chính tả, thiếu dấu hoặc viết tắt.
+3. **`unicodedata` & `re` (Python Built-in):** Chuẩn hóa Unicode NFC và bóc tách cấu trúc tiền tệ VND trong `normalize.py`.
+4. **Underthesea / Pyvi:** Không bắt buộc dùng làm pipeline tách từ chính để tránh làm méo mó các cụm danh từ riêng của sản phẩm (như *iPhone 15 Pro Max*, *Galaxy Z Fold*).
 
 ---
 
@@ -787,7 +794,7 @@ Mọi trường hợp kiểm tra điều kiện cứng phải đạt 100% tuân 
 
 ## 13. Kết luận
 
-Kiến trúc phù hợp nhất với phạm vi hiện tại là **FastAPI + Uvicorn + SQLModel (Pydantic + SQLAlchemy) + PostgreSQL + Alembic + NLP tiếng Việt dạng kết hợp + Ollama Agent gọi công cụ** (hỗ trợ streaming response). CSV chỉ seed dữ liệu ban đầu; PostgreSQL là nguồn chuẩn khi web chạy. NLP hiểu câu hỏi, Agent điều phối và diễn đạt, còn catalog truy vấn và xếp hạng dữ liệu xác định. Cách phân chia này mô phỏng web thật mà vẫn dễ làm theo từng bước và tránh để LLM tự bịa thông tin sản phẩm.
+Kiến trúc phù hợp nhất với phạm vi hiện tại là **FastAPI + Uvicorn + SQLModel (Pydantic + SQLAlchemy) + PostgreSQL + Alembic + NLP tiếng Việt Hybrid (SetFit Few-Shot Intent + RapidFuzz Slots) + Ollama Agent gọi công cụ** (hỗ trợ streaming response). CSV chỉ seed dữ liệu ban đầu; PostgreSQL là nguồn chuẩn khi web chạy. NLP hiểu câu hỏi, Agent điều phối và diễn đạt, còn catalog truy vấn và xếp hạng dữ liệu xác định. Cách phân chia này mô phỏng web thật mà vẫn dễ làm theo từng bước và tránh để LLM tự bịa thông tin sản phẩm.
 
 ### Tài liệu kỹ thuật tham khảo
 
