@@ -189,7 +189,7 @@ flowchart LR
   * **Preferences (Sở thích - Ranking):** *"chơi game"*, *"pin trâu"* $\rightarrow$ Dùng để cộng điểm ưu tiên Top 1–3.
 * **2. RapidFuzz & Model đa phiên bản ROM:**
   * So khớp mờ chống sai chính tả: `"ip16 prm"` $\rightarrow$ `"iPhone 16 Pro Max"`.
-  * Tránh đoán mò: Hỏi lại nếu 1 model có nhiều bản ROM (ví dụ: *256GB vs 512GB*).
+  * Xử lý đa bản ROM: Tự động chọn bản tối ưu ngân sách / bản tiêu chuẩn, kèm hiển thị các tùy chọn ROM khác (tránh hỏi lại rườm rà).
 * **3. Dialogue State (Quản lý ngữ cảnh đa lượt, TTL 30 phút):**
   * **Lượt 1:** *"Tìm Samsung dưới 15 củ"* $\rightarrow$ `State: {brand: "Samsung", max_price: 15tr}`
   * **Lượt 2 (Merge):** *"Ưu tiên pin trâu nhé"* $\rightarrow$ `State: {brand: "Samsung", max_price: 15tr, prefs: ["pin_trau"]}`
@@ -197,4 +197,60 @@ flowchart LR
 
 <div class="box">
 <b>Kết quả Luồng 3:</b> Đóng gói thành <code>ValidatedRequest</code> chuẩn truyền cho Catalog Service, không mất thông tin qua các lượt chat.
+</div>
+
+---
+
+# SLIDE 7: VÍ DỤ MINH HỌA MẪU JSON ĐẦU RA (VALIDATED REQUEST)
+
+<div class="grid-2">
+
+<div>
+
+### 💬 Câu nói người dùng
+> *"Tìm giúp mình Xiaomi chơi game, pin trâu, dưới 15 củ."*
+
+### 🔍 Ý nghĩa bóc tách:
+* **`intent: "recommend"`**: Gợi ý top 3 máy tốt nhất.
+* **`filters` (Điều kiện cứng — SQL WHERE):**
+  * Hãng: `Xiaomi`
+  * Trần giá: `< 15.000.000đ` (`max_price_inclusive = false`).
+* **`preferences` (Sở thích mềm — Ranking):**
+  * Ưu tiên tag: `choi_game`
+  * Tag `pin_trau` hoặc `pin_khung` (logic OR).
+* **`limit: 3`**: Chỉ lấy tối đa 3 sản phẩm phù hợp nhất.
+
+</div>
+
+<div style="font-size: 13px; line-height: 1.25;">
+
+```json
+{
+  "intent": "recommend",
+  "filters": {
+    "brand": "Xiaomi",
+    "min_price_vnd": null,
+    "max_price_vnd": 15000000,
+    "min_price_inclusive": true,
+    "max_price_inclusive": false,
+    "min_ram_gb": null,
+    "min_rom_gb": null,
+    "min_battery_mah": null,
+    "min_refresh_rate_hz": null,
+    "required_tags": [],
+    "required_tag_groups": []
+  },
+  "preferences": [
+    {"any_of": ["choi_game"], "priority": 1},
+    {"any_of": ["pin_trau", "pin_khung"], "priority": 1}
+  ],
+  "excluded_brands": [],
+  "excluded_tags": [],
+  "excluded_product_ids": [],
+  "limit": 3
+}
+```
+
+</div>
+
 </div>
